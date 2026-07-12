@@ -1,0 +1,17 @@
+# Caddy reverse proxy configuration for production
+# Routes:
+#   meet.example.com        → Next.js frontend
+#   api.meet.example.com    → FastAPI + caption WebSocket
+#   rtc.meet.example.com    → LiveKit
+
+meet.example.com {
+    reverse_proxy web:3000
+}
+
+api.meet.example.com {
+    reverse_proxy api:8000
+}
+
+rtc.meet.example.com {
+    reverse_proxy livekit:7880
+}

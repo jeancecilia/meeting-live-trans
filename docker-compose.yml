@@ -1,0 +1,120 @@
+# Local Docker Compose Environment
+#
+# docker compose up - starts the complete local environment:
+# - PostgreSQL (port 5432)
+# - Redis (port 6379)
+# - LiveKit (port 7880, 7881)
+# - FastAPI backend (port 8000)
+# - Translation worker
+# - Next.js frontend (port 3000)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-meeting_trans}
+      POSTGRES_USER: ${POSTGRES_USER:-meeting_trans}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-meeting_trans}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-meeting_trans}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    environment:
+      LIVEKIT_CONFIG: |
+        port: 7880
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          stun_servers:
+            - stun.l.google.com:19302
+        keys:
+          devkey: secret
+        logging:
+          level: debug
+    command: --config-from-env
+    healthcheck:
+      test: ["CMD", "livekit-cli", "list-rooms"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-meeting_trans}
+      - POSTGRES_USER=${POSTGRES_USER:-meeting_trans}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-meeting_trans}
+      - REDIS_URL=redis://redis:6379/0
+      - LIVEKIT_HOST=livekit
+      - LIVEKIT_PORT=7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
+      - LIVEKIT_WS_URL=ws://livekit:7880
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    environment:
+      - APP_ENV=development
+      - REDIS_URL=redis://redis:6379/0
+      - LIVEKIT_HOST=livekit
+      - LIVEKIT_PORT=7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
+      - LIVEKIT_WS_URL=ws://livekit:7880
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-change-me}
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_LIVEKIT_WS_URL=ws://localhost:7880
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+
+volumes:
+  postgres_data:

@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-data/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+test-results/
+
+# Logs
+*.log
+logs/
+
+# Python virtual environment
+venv/
+.venv/
+env/
+
+# Alembic
+alembic/versions/*.pyc
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc
+*.tmp
+*.temp

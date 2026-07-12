@@ -1,0 +1,9 @@
+sample_id,category,direction,source_audio_path,expected_meaning,source_transcript,translated_text,first_caption_latency_ms,final_caption_latency_ms,manual_quality_rating,notes
+biz-001,business,en-th,,"We need to launch the application by September, with a budget of around 200,000 THB.","We need to launch the app by September, budget around two hundred thousand Thai Baht.",,,,,
+biz-002,business,th-en,,The client wants to review the contract before signing.,ลูกค้าต้องการตรวจสอบสัญญาก่อนเซ็น,,,,,
+tech-001,tech,en-th,,The API endpoint returns JSON with user data and authentication tokens.,The API endpoint returns JSON with user data and auth tokens.,,,,,
+name-001,names,th-en,,My name is Somchai Jaidee.,ผมชื่อสมชาย ใจดี,,,,,
+name-002,names,en-th,,Please contact Jennifer Williams at extension 405.,Please contact Jennifer Williams at extension 405.,,,,,
+date-001,dates,en-th,,"The meeting is scheduled for Monday, July 15, 2026 at 2:30 PM.","The meeting is on Monday, July fifteenth, two thousand twenty-six at two thirty PM.",,,,,
+price-001,prices,en-th,,"The total cost is $1,250.50 or approximately €1,100.","Total cost is one thousand two hundred fifty dollars and fifty cents, or about eleven hundred euros.",,,,,
+price-002,prices,th-en,,"The price for this project is 50,000 Thai Baht.",ราคาสำหรับโปรเจกต์นี้คือห้าหมื่นบาท,,,,,

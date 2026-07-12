@@ -1,0 +1,14 @@
+{
+  "name": "@meeting-live-trans/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared event schemas and types for Meeting Live Trans",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

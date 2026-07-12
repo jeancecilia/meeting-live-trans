@@ -1,0 +1,10 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY apps/translation-worker/pyproject.toml .
+RUN pip install --no-cache-dir .
+
+COPY apps/translation-worker/ .
+
+CMD ["python", "main.py"]

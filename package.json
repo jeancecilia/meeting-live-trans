@@ -1,0 +1,29 @@
+{
+  "name": "meeting-live-trans",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private English ↔ Thai meeting platform with realtime translation",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:api": "cd apps/api && uvicorn app.main:app --reload --port 8000",
+    "build": "npm run build:web",
+    "build:web": "cd apps/web && npm run build",
+    "lint": "npm run lint:web && npm run lint:api",
+    "lint:web": "cd apps/web && npm run lint",
+    "lint:api": "cd apps/api && ruff check .",
+    "format": "npm run format:web && npm run format:api",
+    "format:web": "cd apps/web && prettier --write .",
+    "format:api": "cd apps/api && ruff format .",
+    "typecheck": "cd apps/web && npx tsc --noEmit",
+    "test": "npm run test:web && npm run test:api",
+    "test:web": "cd apps/web && npm run test",
+    "test:api": "cd apps/api && pytest",
+    "db:migrate": "cd apps/api && alembic upgrade head",
+    "db:rollback": "cd apps/api && alembic downgrade -1",
+    "db:revision": "cd apps/api && alembic revision --autogenerate -m"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

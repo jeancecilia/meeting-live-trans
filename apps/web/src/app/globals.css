@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-background: #0f172a;
+    --color-surface: #1e293b;
+    --color-text: #f8fafc;
+    --color-text-muted: #94a3b8;
+    --color-border: #334155;
+    --color-caption-bg: rgba(15, 23, 42, 0.85);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  .caption-overlay {
+    @apply fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/85 text-white
+           px-6 py-3 rounded-lg max-w-2xl text-center text-lg font-medium
+           shadow-lg backdrop-blur-sm z-50;
+  }
+
+  .caption-speaker {
+    @apply text-xs text-slate-400 mb-1 block;
+  }
+}
