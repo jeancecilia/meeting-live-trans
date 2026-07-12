@@ -2,7 +2,8 @@
 Participant audio pipeline: LiveKit → normalize → OpenAI → translate → captions.
 
 Translates only completed transcription items. One caption queue owner:
-the worker drains and delivers through flush_captions().
+the worker drains and delivers. finish() commits pending audio, waits for
+final transcript, and returns remaining captions.
 """
 
 import array
@@ -188,14 +189,26 @@ class ParticipantAudioPipeline:
         return out
 
     async def stop(self) -> None:
-        """Graceful shutdown: commit pending audio, drain final captions, close."""
-        self._state = PipelineState.STOPPING
+        """Backward-compatible stop without returning captions."""
+        await self.finish()
 
+    async def finish(self, timeout: float = 5.0) -> list[dict]:
+        """
+        Graceful shutdown:
+        1. Commit pending audio to OpenAI.
+        2. Wait for final transcript + translation (consumer still RUNNING).
+        3. Cancel consumer.
+        4. Drain remaining captions.
+        5. Close OpenAI.
+        Returns any captions that arrived after the last drain.
+        """
         if self._transcription:
             await self._transcription.commit_pending()
 
-        # Wait briefly for final transcript and translation
-        await asyncio.sleep(2.0)
+        # Keep consumer running while final transcript arrives
+        await asyncio.sleep(timeout)
+
+        self._state = PipelineState.STOPPING
 
         if self._consumer:
             self._consumer.cancel()
@@ -205,10 +218,14 @@ class ParticipantAudioPipeline:
                 pass
             self._consumer = None
 
+        remaining = self.drain_captions()
+
         if self._transcription:
             await self._transcription.stop()
+
         self._state = PipelineState.IDLE
-        logger.info("Stopped pipeline: %s", self.participant_name)
+        logger.info("Finished pipeline: %s (%d remaining captions)", self.participant_name, len(remaining))
+        return remaining
 
     @property
     def is_running(self) -> bool:

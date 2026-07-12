@@ -1,7 +1,7 @@
 """
 Translation worker — polls API for active rooms, joins LiveKit hidden,
 subscribes to mic tracks, processes audio through OpenAI pipeline.
-One owner of caption delivery: drain queue and post after each frame.
+Sole owner of caption delivery: drain queue after each frame and on shutdown.
 """
 
 import asyncio
@@ -113,31 +113,28 @@ async def process_audio(
             frame = event.frame
             await pipeline.process_audio_frame(frame.data.tobytes(), frame.sample_rate, frame.num_channels)
 
-            # Worker is the sole owner of caption delivery
             for ev in pipeline.drain_captions():
-                ev["meeting_id"] = meeting_id
-                async with httpx.AsyncClient(timeout=5.0) as c:
-                    await c.post(
-                        f"{CAPTION_API_URL}/api/internal/meetings/{meeting_id}/caption-events",
-                        json=ev,
-                        headers={"Authorization": f"Bearer {WORKER_SERVICE_TOKEN}"},
-                    )
+                await _send_caption(meeting_id, ev)
     except Exception as e:
         logger.error("Audio error %s: %s", pname, e)
     finally:
-        # Drain any remaining captions before stopping
-        for ev in pipeline.drain_captions():
-            ev["meeting_id"] = meeting_id
-            try:
-                async with httpx.AsyncClient(timeout=5.0) as c:
-                    await c.post(
-                        f"{CAPTION_API_URL}/api/internal/meetings/{meeting_id}/caption-events",
-                        json=ev,
-                        headers={"Authorization": f"Bearer {WORKER_SERVICE_TOKEN}"},
-                    )
-            except Exception:
-                pass
-        await pipeline.stop()
+        # finish() commits pending audio, waits for final transcript, returns remaining
+        remaining = await pipeline.finish()
+        for ev in remaining:
+            await _send_caption(meeting_id, ev)
+
+
+async def _send_caption(meeting_id: str, event: dict) -> None:
+    event["meeting_id"] = meeting_id
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            await c.post(
+                f"{CAPTION_API_URL}/api/internal/meetings/{meeting_id}/caption-events",
+                json=event,
+                headers={"Authorization": f"Bearer {WORKER_SERVICE_TOKEN}"},
+            )
+    except Exception as e:
+        logger.error("Failed to send caption: %s", e)
 
 
 async def main() -> None:
