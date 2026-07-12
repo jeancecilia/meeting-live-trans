@@ -1,7 +1,7 @@
 """LiveKit token routes — uses preferred_caption_language from user profile."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -33,7 +33,6 @@ class GuestTokenRequest(BaseModel):
 
 
 def _create_guest_session_token(meeting_id: str, guest_identity: str, spoken_language: str, invite_id: str) -> str:
-    from datetime import timedelta
     expire = datetime.now(timezone.utc) + timedelta(minutes=30)
     payload = {
         "sub": guest_identity, "meeting_id": meeting_id, "spoken_language": spoken_language,
@@ -52,8 +51,6 @@ def _decode_guest_session(token: str) -> dict:
     except JWTError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid guest session")
 
-
-from datetime import timedelta
 
 def _create_livekit_token(identity: str, display_name: str, room_name: str, metadata: dict) -> str:
     t = lk_api.AccessToken(settings.livekit_api_key, settings.livekit_api_secret)

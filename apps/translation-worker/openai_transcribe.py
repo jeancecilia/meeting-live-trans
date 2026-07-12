@@ -2,8 +2,10 @@
 OpenAI realtime transcription provider.
 
 Commits audio at utterance boundaries (silence-based), not on a fixed timer.
+Supports commit_pending() for track-end cleanup.
 """
 
+import array
 import asyncio
 import base64
 import json
@@ -19,7 +21,7 @@ logger = logging.getLogger("translation-worker.openai-transcribe")
 
 MAX_RECONNECT_DELAY = 30.0
 BASE_RECONNECT_DELAY = 1.0
-SILENCE_COMMIT_MS = 500   # Commit after this much silence
+SILENCE_COMMIT_MS = 500
 
 
 class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
@@ -35,7 +37,6 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
         self._pending: dict[str, str] = {}
         self._task: Optional[asyncio.Task] = None
         self._reconnect: bool = True
-        # Silence-based commit tracking
         self._last_signal_time: float = 0.0
         self._committed: bool = True
 
@@ -59,8 +60,7 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
         while self._reconnect:
             try:
                 self._ws = await websockets.connect(url, additional_headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "OpenAI-Beta": "realtime=v1",
+                    "Authorization": f"Bearer {self._api_key}", "OpenAI-Beta": "realtime=v1",
                 }, ping_interval=20, ping_timeout=10)
 
                 await self._ws.send(json.dumps({"type": "session.update", "session": {
@@ -93,7 +93,6 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
             encoded = base64.b64encode(pcm).decode("ascii")
             await self._ws.send(json.dumps({"type": "input_audio_buffer.append", "audio": encoded}))
 
-            # Detect if this chunk contains actual speech signal
             has_signal = self._has_signal(pcm)
             now = time.monotonic()
 
@@ -101,18 +100,25 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
                 self._last_signal_time = now
                 self._committed = False
             elif not self._committed and (now - self._last_signal_time) * 1000 >= SILENCE_COMMIT_MS:
-                # Sustained silence after speech → commit the utterance
-                await self._ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
-                self._committed = True
-                logger.debug("Utterance committed after silence")
+                await self._commit_now()
         except Exception as e:
             logger.error("Audio send failed: %s", e)
             self._connected = False
 
+    async def commit_pending(self) -> None:
+        """Commit any uncommitted audio buffer. Call when a track stops."""
+        if not self._committed:
+            await self._commit_now()
+
+    async def _commit_now(self) -> None:
+        if self._ws and self._connected:
+            await self._ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+            self._committed = True
+            logger.debug("Utterance committed")
+
     def _has_signal(self, pcm: bytes) -> bool:
         if len(pcm) < 2:
             return False
-        import array
         samples = array.array("h", pcm)
         if len(samples) == 0:
             return False

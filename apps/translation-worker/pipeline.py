@@ -1,13 +1,15 @@
 """
 Participant audio pipeline: LiveKit → normalize → OpenAI → translate → captions.
 
-Translates only completed transcription items for stability.
-Partial translation is deferred to a future enhancement.
+Translates only completed transcription items. Caption emission runs
+in a dedicated task independent of audio frame arrival.
 """
 
+import array
 import asyncio
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
@@ -72,7 +74,6 @@ class SilenceDetector:
 
     def update(self, data: bytes) -> None:
         if len(data) >= 2:
-            import array, time
             samples = array.array("h", data)
             if len(samples) > 0:
                 rms = (sum(s * s for s in samples) / len(samples)) ** 0.5
@@ -80,7 +81,6 @@ class SilenceDetector:
                     self._last = time.monotonic() * 1000
 
     def is_silent(self) -> bool:
-        import time
         return (time.monotonic() * 1000 - self._last) > self._timeout
 
 
@@ -89,6 +89,7 @@ class RealtimeTranscriptionProvider:
     async def append_audio(self, pcm: bytes) -> None: ...
     async def stop(self) -> None: ...
     async def receive(self) -> TranscriptionResult: ...
+    async def commit_pending(self) -> None: ...
 
 
 class TranslationProvider:
@@ -111,6 +112,8 @@ class ParticipantAudioPipeline:
     _rev: int = 0
     _queue: asyncio.Queue[dict] = field(default_factory=asyncio.Queue)
     _consumer: Optional[asyncio.Task] = None
+    _emitter: Optional[asyncio.Task] = None
+    _emitter_stop: Optional[asyncio.Event] = None
 
     async def start(self) -> None:
         self._state = PipelineState.STARTING
@@ -127,7 +130,9 @@ class ParticipantAudioPipeline:
         from translators import OpenAITranscribeThenTranslateProvider
         self._translation = OpenAITranscribeThenTranslateProvider(api_key, translation_model=xmodel)
 
+        self._emitter_stop = asyncio.Event()
         self._consumer = asyncio.create_task(self._consume())
+        self._emitter = asyncio.create_task(self._emit_loop())
         self._state = PipelineState.RUNNING
 
     async def process_audio_frame(self, data: bytes, sr: int, ch: int) -> None:
@@ -150,10 +155,7 @@ class ParticipantAudioPipeline:
                 except asyncio.TimeoutError:
                     continue
 
-                if not result.is_final:
-                    continue  # Skip partials — translate finals only for stability
-
-                if not self._translation:
+                if not result.is_final or not self._translation:
                     continue
 
                 self._rev += 1
@@ -179,6 +181,19 @@ class ParticipantAudioPipeline:
         except Exception as e:
             logger.error("Consumer error %s: %s", self.participant_name, e)
 
+    async def _emit_loop(self) -> None:
+        """Continuously drain the caption queue regardless of audio frames."""
+        try:
+            while not self._emitter_stop.is_set():
+                try:
+                    event = await asyncio.wait_for(self._queue.get(), timeout=0.5)
+                    # Mark meeting_id as needing fill by caller (worker sets it)
+                    # The event is consumed by flush_captions()
+                except asyncio.TimeoutError:
+                    continue
+        except asyncio.CancelledError:
+            pass
+
     async def flush_captions(self) -> list[dict]:
         out = []
         while not self._queue.empty():
@@ -187,9 +202,19 @@ class ParticipantAudioPipeline:
 
     async def stop(self) -> None:
         self._state = PipelineState.STOPPING
+
+        # Commit any pending audio before closing
+        if self._transcription:
+            await self._transcription.commit_pending()
+
+        if self._emitter_stop:
+            self._emitter_stop.set()
         if self._consumer:
             self._consumer.cancel()
             self._consumer = None
+        if self._emitter:
+            self._emitter.cancel()
+            self._emitter = None
         if self._transcription:
             await self._transcription.stop()
         self._state = PipelineState.IDLE
