@@ -53,6 +53,10 @@ services:
           devkey: secret
         logging:
           level: debug
+        webhook:
+          api_key: devkey
+          urls:
+            - http://api:8000/api/webhooks/livekit
     command: --config-from-env
     healthcheck:
       test: ["CMD", "livekit-cli", "list-rooms"]

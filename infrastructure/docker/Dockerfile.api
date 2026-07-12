@@ -7,6 +7,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY apps/api/ .
 
+# Startup script: run migrations, seed, then start server
+RUN echo '#!/bin/sh\n\
+set -e\n\
+echo "Running database migrations..."\n\
+python -m alembic upgrade head\n\
+echo "Seeding database..."\n\
+python -m app.seed || echo "Seed skipped (users may already exist)"\n\
+echo "Starting API server..."\n\
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000\n\
+' > /start.sh && chmod +x /start.sh
+
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/start.sh"]

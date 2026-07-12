@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_current_user, require_internal_role
+from app.auth.dependencies import require_internal_role
 from app.config import settings
 from app.database import get_db
 from app.models.meeting import Meeting
@@ -53,12 +53,14 @@ def _decode_guest_session(token: str) -> dict:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid guest session")
 
 
+from datetime import timedelta
+
 def _create_livekit_token(identity: str, display_name: str, room_name: str, metadata: dict) -> str:
     t = lk_api.AccessToken(settings.livekit_api_key, settings.livekit_api_secret)
     t.with_identity(identity).with_name(display_name)
     t.with_grants(lk_api.VideoGrants(room_join=True, room=room_name, can_publish=True, can_subscribe=True))
     t.with_metadata("; ".join(f"{k}:{v}" for k, v in metadata.items() if v))
-    t.ttl = 30 * 60
+    t.with_ttl(timedelta(minutes=30))
     return t.to_jwt()
 
 
