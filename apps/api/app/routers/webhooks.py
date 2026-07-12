@@ -1,9 +1,4 @@
-"""
-LiveKit webhook processing (MTG-025).
-
-Uses LiveKit's TokenVerifier + WebhookReceiver for mandatory
-signature verification.
-"""
+"""LiveKit webhook processing with mandatory signature verification."""
 
 import uuid
 from datetime import datetime, timezone
@@ -21,82 +16,55 @@ from app.models.meeting import Meeting
 from app.models.meeting_participant import MeetingParticipant
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
-_processed_events: set[str] = set()
+_processed: set[str] = set()
 
 
 @router.post("/livekit")
-async def livekit_webhook(
-    request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
-    """Receive and verify LiveKit webhook events using the official receiver."""
+async def webhook(request: Request, db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
     body = await request.body()
-    auth_header = request.headers.get("Authorization", "")
+    auth = request.headers.get("Authorization", "")
 
     try:
-        verifier = lk_api.TokenVerifier(
-            settings.livekit_api_key,
-            settings.livekit_api_secret,
-        )
-        receiver = lk_api.WebhookReceiver(verifier)
-        event_data = receiver.receive(body.decode("utf-8"), auth_header)
+        v = lk_api.TokenVerifier(settings.livekit_api_key, settings.livekit_api_secret)
+        r = lk_api.WebhookReceiver(v)
+        ev = r.receive(body.decode("utf-8"), auth)
     except Exception:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid webhook signature")
 
-    event = event_data.event
-    event_id = event_data.id
+    event = ev.event
+    eid = ev.id
+    if eid and eid in _processed:
+        return {"status": "duplicate_ignored", "event_id": eid}
 
-    if event_id and event_id in _processed_events:
-        return {"status": "duplicate_ignored", "event_id": event_id}
+    room_name = ev.room.name if ev.HasField("room") else ""
+    pid = ev.participant.identity if ev.HasField("participant") else ""
 
-    room_name = event_data.room.name if event_data.HasField("room") else ""
-    participant_identity = event_data.participant.identity if event_data.HasField("participant") else ""
-
-    result = await db.execute(select(Meeting).where(Meeting.room_name == room_name))
-    meeting = result.scalar_one_or_none()
+    meeting = (await db.execute(select(Meeting).where(Meeting.room_name == room_name))).scalar_one_or_none()
     if not meeting:
         return {"status": "meeting_not_found", "room_name": room_name}
 
+    mid = meeting.id
+
     if event == "participant_joined":
-        await _handle_participant_joined(db, meeting.id, participant_identity, event_id)
+        await db.execute(update(MeetingParticipant).where(
+            MeetingParticipant.meeting_id == mid, MeetingParticipant.livekit_identity == pid
+        ).values(joined_at=datetime.now(timezone.utc)))
+        await db.execute(update(Meeting).where(Meeting.id == mid, Meeting.status == "created").values(status="active", started_at=datetime.now(timezone.utc)))
+        db.add(AuditLog(meeting_id=mid, event_type="participant_joined", metadata_json={"identity": pid, "webhook_event_id": eid}))
     elif event == "participant_left":
-        await _handle_participant_left(db, meeting.id, participant_identity, event_id)
+        await db.execute(update(MeetingParticipant).where(
+            MeetingParticipant.meeting_id == mid, MeetingParticipant.livekit_identity == pid
+        ).values(left_at=datetime.now(timezone.utc)))
+        db.add(AuditLog(meeting_id=mid, event_type="participant_left", metadata_json={"identity": pid, "webhook_event_id": eid}))
     elif event == "track_published":
-        await _handle_track_event(db, meeting.id, participant_identity, event_data, "track_published", event_id)
+        db.add(AuditLog(meeting_id=mid, event_type="track_published", metadata_json={"identity": pid, "track_sid": ev.track.sid if ev.HasField("track") else "", "webhook_event_id": eid}))
     elif event == "track_unpublished":
-        await _handle_track_event(db, meeting.id, participant_identity, event_data, "track_unpublished", event_id)
+        db.add(AuditLog(meeting_id=mid, event_type="track_unpublished", metadata_json={"identity": pid, "track_sid": ev.track.sid if ev.HasField("track") else "", "webhook_event_id": eid}))
     elif event == "room_finished":
-        await _handle_room_finished(db, meeting.id, event_id)
+        await db.execute(update(Meeting).where(Meeting.id == mid).values(status="ended", ended_at=datetime.now(timezone.utc)))
+        db.add(AuditLog(meeting_id=mid, event_type="room_finished", metadata_json={"webhook_event_id": eid}))
 
-    if event_id:
-        _processed_events.add(event_id)
-
+    await db.commit()
+    if eid:
+        _processed.add(eid)
     return {"status": "processed", "event": event}
-
-
-async def _handle_participant_joined(db: AsyncSession, meeting_id: uuid.UUID, identity: str, event_id: str) -> None:
-    await db.execute(update(MeetingParticipant).where(MeetingParticipant.livekit_identity == identity).values(joined_at=datetime.now(timezone.utc)))
-    await db.execute(update(Meeting).where(Meeting.id == meeting_id, Meeting.status == "created").values(status="active", started_at=datetime.now(timezone.utc)))
-    db.add(AuditLog(meeting_id=meeting_id, event_type="participant_joined", metadata_json={"identity": identity, "webhook_event_id": event_id}))
-    await db.commit()
-
-
-async def _handle_participant_left(db: AsyncSession, meeting_id: uuid.UUID, identity: str, event_id: str) -> None:
-    await db.execute(update(MeetingParticipant).where(MeetingParticipant.livekit_identity == identity).values(left_at=datetime.now(timezone.utc)))
-    db.add(AuditLog(meeting_id=meeting_id, event_type="participant_left", metadata_json={"identity": identity, "webhook_event_id": event_id}))
-    await db.commit()
-
-
-async def _handle_track_event(db: AsyncSession, meeting_id: uuid.UUID, identity: str, event_data, event_type: str, event_id: str) -> None:
-    db.add(AuditLog(meeting_id=meeting_id, event_type=event_type, metadata_json={
-        "identity": identity,
-        "track_sid": event_data.track.sid if event_data.HasField("track") else "",
-        "webhook_event_id": event_id,
-    }))
-    await db.commit()
-
-
-async def _handle_room_finished(db: AsyncSession, meeting_id: uuid.UUID, event_id: str) -> None:
-    await db.execute(update(Meeting).where(Meeting.id == meeting_id).values(status="ended", ended_at=datetime.now(timezone.utc)))
-    db.add(AuditLog(meeting_id=meeting_id, event_type="room_finished", metadata_json={"webhook_event_id": event_id}))
-    await db.commit()

@@ -1,8 +1,8 @@
 """
-Participant audio pipeline — full end-to-end processing:
-LiveKit audio frames → normalize → OpenAI transcription → translate → caption emit.
+Participant audio pipeline: LiveKit → normalize → OpenAI → translate → captions.
 
-MTG-030, MTG-031, MTG-032, MTG-033, MTG-037
+Translates only completed transcription items for stability.
+Partial translation is deferred to a future enhancement.
 """
 
 import asyncio
@@ -40,65 +40,49 @@ class TranslationResult:
     is_final: bool
 
 
-# ──── Audio normalization ────
-
 class AudioNormalizer:
-    TARGET_SAMPLE_RATE = 24000
-    TARGET_CHANNELS = 1
     MAX_BUFFER_SIZE = 1024 * 512
 
     def __init__(self) -> None:
         self._buffer: list[bytes] = []
-        self._buffer_size: int = 0
+        self._size: int = 0
 
-    async def append_frame(self, pcm_data: bytes, sample_rate: int, channels: int) -> None:
-        if self._buffer_size + len(pcm_data) > self.MAX_BUFFER_SIZE:
+    async def append_frame(self, data: bytes, sample_rate: int, channels: int) -> None:
+        if self._size + len(data) > self.MAX_BUFFER_SIZE:
             if self._buffer:
-                dropped = self._buffer.pop(0)
-                self._buffer_size -= len(dropped)
-        self._buffer.append(pcm_data)
-        self._buffer_size += len(pcm_data)
+                self._size -= len(self._buffer.pop(0))
+        self._buffer.append(data)
+        self._size += len(data)
 
     async def drain(self) -> bytes:
-        data = b"".join(self._buffer)
+        out = b"".join(self._buffer)
         self._buffer.clear()
-        self._buffer_size = 0
-        return data
+        self._size = 0
+        return out
 
     @property
     def buffer_size(self) -> int:
-        return self._buffer_size
+        return self._size
 
-
-# ──── Silence detection ────
 
 class SilenceDetector:
-    def __init__(self, silence_timeout_ms: int = 5000) -> None:
-        self.silence_timeout_ms = silence_timeout_ms
-        self._last_audio_time: float = 0.0
-        self._silence_threshold: int = 100
+    def __init__(self, timeout_ms: int = 5000) -> None:
+        self._timeout = timeout_ms
+        self._last: float = 0.0
 
-    def update(self, pcm_data: bytes) -> None:
-        if self._has_signal(pcm_data):
-            import time
-            self._last_audio_time = time.monotonic() * 1000
+    def update(self, data: bytes) -> None:
+        if len(data) >= 2:
+            import array, time
+            samples = array.array("h", data)
+            if len(samples) > 0:
+                rms = (sum(s * s for s in samples) / len(samples)) ** 0.5
+                if rms > 100:
+                    self._last = time.monotonic() * 1000
 
     def is_silent(self) -> bool:
         import time
-        return (time.monotonic() * 1000 - self._last_audio_time) > self.silence_timeout_ms
+        return (time.monotonic() * 1000 - self._last) > self._timeout
 
-    def _has_signal(self, pcm_data: bytes) -> bool:
-        if len(pcm_data) < 2:
-            return False
-        import array
-        samples = array.array("h", pcm_data)
-        if len(samples) == 0:
-            return False
-        rms = (sum(s * s for s in samples) / len(samples)) ** 0.5
-        return rms > self._silence_threshold
-
-
-# ──── Interfaces ────
 
 class RealtimeTranscriptionProvider:
     async def start(self, language: str) -> None: ...
@@ -108,11 +92,8 @@ class RealtimeTranscriptionProvider:
 
 
 class TranslationProvider:
-    async def translate_partial(self, text: str, source_language: str, target_language: str, revision: int) -> TranslationResult: ...
-    async def translate_final(self, text: str, source_language: str, target_language: str) -> TranslationResult: ...
+    async def translate_final(self, text: str, source: str, target: str) -> TranslationResult: ...
 
-
-# ──── Participant pipeline (MTG-030) ────
 
 @dataclass
 class ParticipantAudioPipeline:
@@ -122,139 +103,97 @@ class ParticipantAudioPipeline:
     caption_language: str
 
     _normalizer: AudioNormalizer = field(default_factory=AudioNormalizer)
-    _silence_detector: SilenceDetector = field(default_factory=SilenceDetector)
-    _transcription_provider: Optional[RealtimeTranscriptionProvider] = None
-    _translation_provider: Optional[TranslationProvider] = None
+    _silence: SilenceDetector = field(default_factory=SilenceDetector)
+    _transcription: Optional[RealtimeTranscriptionProvider] = None
+    _translation: Optional[TranslationProvider] = None
     _state: PipelineState = PipelineState.IDLE
-    _sequence: int = 0
-    _revision: int = 0
-    _caption_queue: asyncio.Queue[dict] = field(default_factory=asyncio.Queue)
-    _consumer_task: Optional[asyncio.Task] = None
+    _seq: int = 0
+    _rev: int = 0
+    _queue: asyncio.Queue[dict] = field(default_factory=asyncio.Queue)
+    _consumer: Optional[asyncio.Task] = None
 
     async def start(self) -> None:
         self._state = PipelineState.STARTING
-        logger.info("Starting pipeline for %s (lang: %s→%s)", self.participant_name, self.spoken_language, self.caption_language)
+        logger.info("Pipeline %s: %s→%s", self.participant_name, self.spoken_language, self.caption_language)
 
         api_key = os.environ.get("OPENAI_API_KEY", "")
-        transcribe_model = os.environ.get("OPENAI_REALTIME_TRANSCRIBE_MODEL", "gpt-realtime-whisper")
-        translate_model = os.environ.get("OPENAI_TRANSLATION_MODEL", "gpt-4o-mini")
+        tmodel = os.environ.get("OPENAI_REALTIME_TRANSCRIBE_MODEL", "gpt-realtime-whisper")
+        xmodel = os.environ.get("OPENAI_TRANSLATION_MODEL", "gpt-4o-mini")
 
-        # Create the real transcription provider
         from openai_transcribe import OpenAIRealtimeTranscribeProvider
-        self._transcription_provider = OpenAIRealtimeTranscribeProvider(
-            api_key=api_key,
-            model=transcribe_model,
-        )
-        await self._transcription_provider.start(self.spoken_language)
+        self._transcription = OpenAIRealtimeTranscribeProvider(api_key, model=tmodel)
+        await self._transcription.start(self.spoken_language)
 
-        # Create the translation provider (fallback: transcribe then translate)
         from translators import OpenAITranscribeThenTranslateProvider
-        self._translation_provider = OpenAITranscribeThenTranslateProvider(
-            api_key=api_key,
-            translation_model=translate_model,
-        )
+        self._translation = OpenAITranscribeThenTranslateProvider(api_key, translation_model=xmodel)
 
-        # Start the transcript consumer task
-        self._consumer_task = asyncio.create_task(self._consume_transcripts())
-
+        self._consumer = asyncio.create_task(self._consume())
         self._state = PipelineState.RUNNING
-        logger.info("Pipeline running for %s", self.participant_name)
 
-    async def process_audio_frame(self, pcm_data: bytes, sample_rate: int, channels: int) -> None:
+    async def process_audio_frame(self, data: bytes, sr: int, ch: int) -> None:
         if self._state != PipelineState.RUNNING:
             return
-
-        self._silence_detector.update(pcm_data)
-        if self._silence_detector.is_silent():
+        self._silence.update(data)
+        if self._silence.is_silent():
             return
+        await self._normalizer.append_frame(data, sr, ch)
+        chunk = await self._normalizer.drain()
+        if chunk and self._transcription:
+            await self._transcription.append_audio(chunk)
 
-        await self._normalizer.append_frame(pcm_data, sample_rate, channels)
-
-        # Drain accumulated audio and send to transcription provider
-        audio_chunk = await self._normalizer.drain()
-        if audio_chunk and self._transcription_provider:
-            await self._transcription_provider.append_audio(audio_chunk)
-
-    async def _consume_transcripts(self) -> None:
-        """Continuously receive transcripts, translate them, and emit captions."""
+    async def _consume(self) -> None:
+        """Consume transcription results. Translate only final items."""
         try:
-            while self._state == PipelineState.RUNNING and self._transcription_provider:
+            while self._state == PipelineState.RUNNING and self._transcription:
                 try:
-                    result = await asyncio.wait_for(
-                        self._transcription_provider.receive(),
-                        timeout=1.0,
-                    )
+                    result = await asyncio.wait_for(self._transcription.receive(), timeout=1.0)
                 except asyncio.TimeoutError:
                     continue
 
-                if not self._translation_provider:
+                if not result.is_final:
+                    continue  # Skip partials — translate finals only for stability
+
+                if not self._translation:
                     continue
 
-                self._revision += 1
-                self._sequence += 1
-
-                if result.is_final:
-                    translation = await self._translation_provider.translate_final(
-                        result.text,
-                        self.spoken_language,
-                        self.caption_language,
-                    )
-                    event = {
-                        "type": "caption.final",
-                        "event_id": result.item_id,
-                        "meeting_id": "",
-                        "speaker_id": self.participant_id,
-                        "speaker_name": self.participant_name,
-                        "source_language": self.spoken_language,
-                        "target_language": self.caption_language,
-                        "translated_text": translation.text,
-                        "sequence": self._sequence,
-                        "revision": self._revision,
-                        "is_final": True,
-                    }
-                else:
-                    translation = await self._translation_provider.translate_partial(
-                        result.text,
-                        self.spoken_language,
-                        self.caption_language,
-                        self._revision,
-                    )
-                    event = {
-                        "type": "caption.delta",
-                        "event_id": result.item_id,
-                        "meeting_id": "",
-                        "speaker_id": self.participant_id,
-                        "speaker_name": self.participant_name,
-                        "source_language": self.spoken_language,
-                        "target_language": self.caption_language,
-                        "translated_text": translation.text,
-                        "sequence": self._sequence,
-                        "revision": self._revision,
-                        "is_final": False,
-                    }
-
-                await self._caption_queue.put(event)
-
+                self._rev += 1
+                self._seq += 1
+                translation = await self._translation.translate_final(
+                    result.text, self.spoken_language, self.caption_language,
+                )
+                await self._queue.put({
+                    "type": "caption.final",
+                    "event_id": result.item_id,
+                    "meeting_id": "",
+                    "speaker_id": self.participant_id,
+                    "speaker_name": self.participant_name,
+                    "source_language": self.spoken_language,
+                    "target_language": self.caption_language,
+                    "translated_text": translation.text,
+                    "sequence": self._seq,
+                    "revision": self._rev,
+                    "is_final": True,
+                })
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error("Transcript consumer error for %s: %s", self.participant_name, e)
+            logger.error("Consumer error %s: %s", self.participant_name, e)
 
     async def flush_captions(self) -> list[dict]:
-        captions = []
-        while not self._caption_queue.empty():
-            captions.append(await self._caption_queue.get())
-        return captions
+        out = []
+        while not self._queue.empty():
+            out.append(await self._queue.get())
+        return out
 
     async def stop(self) -> None:
         self._state = PipelineState.STOPPING
-        if self._consumer_task:
-            self._consumer_task.cancel()
-            self._consumer_task = None
-        if self._transcription_provider:
-            await self._transcription_provider.stop()
+        if self._consumer:
+            self._consumer.cancel()
+            self._consumer = None
+        if self._transcription:
+            await self._transcription.stop()
         self._state = PipelineState.IDLE
-        logger.info("Stopped pipeline for %s", self.participant_name)
+        logger.info("Stopped pipeline: %s", self.participant_name)
 
     @property
     def is_running(self) -> bool:

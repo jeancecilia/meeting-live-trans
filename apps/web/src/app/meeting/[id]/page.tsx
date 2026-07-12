@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch, getApiUrl } from "@/lib/api";
 
@@ -25,35 +25,31 @@ export default function MeetingRoom() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Caption state
-  const [captionText, setCaptionText] = useState<string>("");
-  const [captionSpeaker, setCaptionSpeaker] = useState<string>("");
+  const [captionText, setCaptionText] = useState("");
+  const [captionSpeaker, setCaptionSpeaker] = useState("");
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
-  const [captionConnected, setCaptionConnected] = useState(false);
+  const reconnectRef = useRef<number>(0);
+  const MAX_RECONNECT = 5;
 
   // Fetch LiveKit token
   useEffect(() => {
     async function fetchToken() {
       try {
         const isGuest = !!sessionStorage.getItem("guest_session_token");
-
         if (isGuest) {
-          const guestToken = sessionStorage.getItem("guest_session_token")!;
-          const displayName = sessionStorage.getItem("display_name") || "Guest";
+          const gt = sessionStorage.getItem("guest_session_token")!;
+          const dn = sessionStorage.getItem("display_name") || "Guest";
           const res = await apiFetch(`/api/meetings/${meetingId}/livekit-token/guest`, {
-            method: "POST",
-            body: JSON.stringify({ guest_session_token: guestToken, display_name: displayName }),
+            method: "POST", body: JSON.stringify({ guest_session_token: gt, display_name: dn }),
           });
-          if (!res.ok) throw new Error("Failed to get guest token");
-          const data = await res.json();
-          setToken(data.token);
-          setWsUrl(data.ws_url);
+          if (!res.ok) throw new Error("Failed");
+          const d = await res.json();
+          setToken(d.token); setWsUrl(d.ws_url);
         } else {
           const res = await apiFetch(`/api/meetings/${meetingId}/livekit-token`, { method: "POST" });
-          if (!res.ok) throw new Error("Failed to get token");
-          const data = await res.json();
-          setToken(data.token);
-          setWsUrl(data.ws_url);
+          if (!res.ok) throw new Error("Failed");
+          const d = await res.json();
+          setToken(d.token); setWsUrl(d.ws_url);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to connect");
@@ -64,47 +60,52 @@ export default function MeetingRoom() {
     fetchToken();
   }, [meetingId]);
 
-  // Connect to caption WebSocket (internal users only)
+  // Caption WebSocket with auto-reconnect
   useEffect(() => {
     const isGuest = !!sessionStorage.getItem("guest_session_token");
-    if (isGuest || !token) return;
+    if (isGuest) return;
 
-    const accessToken = localStorage.getItem("access_token");
-    if (!accessToken) return;
+    const at = localStorage.getItem("access_token");
+    if (!at) return;
 
-    const apiBase = getApiUrl().replace(/^http/, "ws");
-    const captionWs = new WebSocket(
-      `${apiBase}/api/ws/meetings/${meetingId}/captions?token=${accessToken}&caption_language=th`
-    );
+    let ws: WebSocket | null = null;
+    let closed = false;
 
-    captionWs.onopen = () => setCaptionConnected(true);
-    captionWs.onclose = () => setCaptionConnected(false);
+    function connect() {
+      if (closed || reconnectRef.current >= MAX_RECONNECT) return;
+      const apiBase = getApiUrl().replace(/^http/, "ws");
+      ws = new WebSocket(`${apiBase}/api/ws/meetings/${meetingId}/captions?token=${at}`);
 
-    captionWs.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "caption.delta" || data.type === "caption.final") {
-          setCaptionText(data.translated_text);
-          setCaptionSpeaker(data.speaker_name);
+      ws.onopen = () => { reconnectRef.current = 0; };
+      ws.onclose = () => {
+        if (!closed) {
+          reconnectRef.current += 1;
+          const delay = Math.min(1000 * (2 ** reconnectRef.current), 10000);
+          setTimeout(connect, delay);
         }
-      } catch {}
-    };
+      };
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "caption.delta" || data.type === "caption.final") {
+            setCaptionText(data.translated_text);
+            setCaptionSpeaker(data.speaker_name);
+          }
+        } catch {}
+      };
+      ws.onerror = () => ws?.close();
+    }
 
-    return () => captionWs.close();
-  }, [meetingId, token]);
-
-  function handleToggleCaptions() {
-    setCaptionsEnabled((p) => !p);
-  }
+    connect();
+    return () => { closed = true; ws?.close(); };
+  }, [meetingId]);
 
   if (error) {
     return (
       <main className="min-h-screen flex items-center justify-center p-8 bg-slate-950">
         <div className="text-center space-y-4">
           <p className="text-red-400">{error}</p>
-          <button onClick={() => router.push("/dashboard")} className="px-4 py-2 bg-slate-700 text-white rounded-lg">
-            Back to Dashboard
-          </button>
+          <button onClick={() => router.push("/dashboard")} className="px-4 py-2 bg-slate-700 text-white rounded-lg">Back</button>
         </div>
       </main>
     );
@@ -120,35 +121,20 @@ export default function MeetingRoom() {
 
   return (
     <main className="min-h-screen bg-slate-950">
-      <LiveKitRoom
-        token={token}
-        serverUrl={wsUrl}
-        connect={true}
-        video={true}
-        audio={true}
-        data-lk-theme="default"
-        style={{ height: "100vh" }}
-        onDisconnected={() => router.push("/dashboard")}
-      >
+      <LiveKitRoom token={token} serverUrl={wsUrl} connect={true} video={true} audio={true}
+        data-lk-theme="default" style={{ height: "100vh" }} onDisconnected={() => router.push("/dashboard")}>
         <div className="flex flex-col h-full">
           <div className="flex-1">
-            <GridLayout tracks={[]}>
-              <MeetingVideoGrid />
-            </GridLayout>
+            <GridLayout tracks={[]}><MeetingVideoGrid /></GridLayout>
           </div>
-
-          {/* Caption overlay for internal users */}
           {captionsEnabled && captionText && !sessionStorage.getItem("guest_session_token") && (
             <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-900/85 text-white px-6 py-3 rounded-lg max-w-2xl text-center text-lg font-medium shadow-lg backdrop-blur-sm z-50">
               <span className="text-xs text-slate-400 mb-1 block">{captionSpeaker}</span>
               {captionText}
             </div>
           )}
-
           <RoomAudioRenderer />
-          <div className="bg-slate-900 border-t border-slate-700">
-            <ControlBar />
-          </div>
+          <div className="bg-slate-900 border-t border-slate-700"><ControlBar /></div>
         </div>
       </LiveKitRoom>
     </main>
@@ -157,17 +143,13 @@ export default function MeetingRoom() {
 
 function MeetingVideoGrid() {
   const tracks = useTracks(
-    [
-      { source: Track.Source.Camera, withPlaceholder: true },
-      { source: Track.Source.ScreenShare, withPlaceholder: false },
-    ],
+    [{ source: Track.Source.Camera, withPlaceholder: true }, { source: Track.Source.ScreenShare, withPlaceholder: false }],
     { onlySubscribed: false }
   );
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-4 auto-rows-fr h-full">
-      {tracks.map((trackRef: TrackReference) => (
-        <ParticipantTile key={trackRef.publication?.trackSid} trackRef={trackRef} />
+      {tracks.map((tr: TrackReference) => (
+        <ParticipantTile key={tr.publication?.trackSid} trackRef={tr} />
       ))}
     </div>
   );
