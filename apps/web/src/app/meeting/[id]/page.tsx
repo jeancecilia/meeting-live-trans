@@ -148,8 +148,8 @@ function MeetingVideoGrid() {
   );
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-4 auto-rows-fr h-full">
-      {tracks.map((tr: TrackReference) => (
-        <ParticipantTile key={tr.publication?.trackSid} trackRef={tr} />
+      {tracks.map((tr) => (
+        <ParticipantTile key={tr.publication?.trackSid ?? tr.participant?.identity} trackRef={tr} />
       ))}
     </div>
   );

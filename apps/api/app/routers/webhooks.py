@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from livekit import api as lk_api
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +22,8 @@ _processed: set[str] = set()
 async def webhook(request: Request, db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
     body = await request.body()
     auth = request.headers.get("Authorization", "")
+
+    from livekit import api as lk_api
 
     try:
         v = lk_api.TokenVerifier(settings.livekit_api_key, settings.livekit_api_secret)

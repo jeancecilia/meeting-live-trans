@@ -6,7 +6,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import JWTError, jwt
-from livekit import api as lk_api
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +18,11 @@ from app.models.meeting_participant import MeetingParticipant
 from app.models.user import User
 
 router = APIRouter(tags=["livekit"])
+
+
+def _get_lk_api():
+    from livekit import api
+    return api
 
 
 class LiveKitTokenResponse(BaseModel):
@@ -53,9 +57,10 @@ def _decode_guest_session(token: str) -> dict:
 
 
 def _create_livekit_token(identity: str, display_name: str, room_name: str, metadata: dict) -> str:
-    t = lk_api.AccessToken(settings.livekit_api_key, settings.livekit_api_secret)
+    api = _get_lk_api()
+    t = api.AccessToken(settings.livekit_api_key, settings.livekit_api_secret)
     t.with_identity(identity).with_name(display_name)
-    t.with_grants(lk_api.VideoGrants(room_join=True, room=room_name, can_publish=True, can_subscribe=True))
+    t.with_grants(api.VideoGrants(room_join=True, room=room_name, can_publish=True, can_subscribe=True))
     t.with_metadata("; ".join(f"{k}:{v}" for k, v in metadata.items() if v))
     t.with_ttl(timedelta(minutes=30))
     return t.to_jwt()
