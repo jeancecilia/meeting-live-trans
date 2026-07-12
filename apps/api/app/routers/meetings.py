@@ -2,6 +2,7 @@
 
 import secrets
 import uuid
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -29,7 +30,7 @@ class MeetingResponse(BaseModel):
     title: str
     status: str
     created_by: uuid.UUID
-    created_at: str | None
+    created_at: datetime | None
 
     model_config = {"from_attributes": True}
 
