@@ -2,166 +2,139 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { apiFetch, getApiUrl } from "@/lib/api";
 
-interface Participant {
-  identity: string;
-  name: string;
-  isSpeaking: boolean;
-}
+import {
+  LiveKitRoom,
+  VideoConference,
+  GridLayout,
+  ParticipantTile,
+  RoomAudioRenderer,
+  ControlBar,
+  useTracks,
+  TrackReference,
+} from "@livekit/components-react";
+import { Room, Track } from "livekit-client";
+import "@livekit/components-styles";
 
 export default function MeetingRoom() {
   const { id: meetingId } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [micEnabled, setMicEnabled] = useState(true);
-  const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [screenSharing, setScreenSharing] = useState(false);
-  const [connectionState, setConnectionState] = useState<
-    "connecting" | "connected" | "disconnected"
-  >("connecting");
-  const [captionText, setCaptionText] = useState<string | null>(null);
-  const [captionSpeaker, setCaptionSpeaker] = useState<string>("");
-  const [captionsEnabled, setCaptionsEnabled] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
+  const [wsUrl, setWsUrl] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const videoGridRef = useRef<HTMLDivElement>(null);
-
-  // Simulated connection - in production, this uses LiveKit client SDK
+  // Fetch LiveKit token on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setConnectionState("connected");
-      setParticipants([
-        { identity: "internal_en", name: "English Speaker (You)", isSpeaking: false },
-        { identity: "internal_th", name: "Thai Speaker", isSpeaking: true },
-        { identity: "guest_1", name: "Guest", isSpeaking: false },
-      ]);
-    }, 1500);
-    return () => clearTimeout(timer);
+    async function fetchToken() {
+      try {
+        const isGuest = !!sessionStorage.getItem("guest_session_token");
+
+        if (isGuest) {
+          const guestToken = sessionStorage.getItem("guest_session_token")!;
+          const displayName = sessionStorage.getItem("display_name") || "Guest";
+
+          const res = await apiFetch(`/api/meetings/${meetingId}/livekit-token/guest`, {
+            method: "POST",
+            body: JSON.stringify({
+              guest_session_token: guestToken,
+              display_name: displayName,
+            }),
+          });
+          if (!res.ok) throw new Error("Failed to get guest token");
+          const data = await res.json();
+          setToken(data.token);
+          setWsUrl(data.ws_url);
+        } else {
+          const res = await apiFetch(`/api/meetings/${meetingId}/livekit-token`, {
+            method: "POST",
+          });
+          if (!res.ok) throw new Error("Failed to get token");
+          const data = await res.json();
+          setToken(data.token);
+          setWsUrl(data.ws_url);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to connect");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchToken();
   }, [meetingId]);
 
-  const handleLeave = useCallback(() => {
-    router.push("/");
-  }, [router]);
+  function handleLeave() {
+    router.push("/dashboard");
+  }
 
-  const handleToggleMic = () => setMicEnabled((p) => !p);
-  const handleToggleCamera = () => setCameraEnabled((p) => !p);
-  const handleToggleScreen = () => setScreenSharing((p) => !p);
-  const handleToggleCaptions = () => setCaptionsEnabled((p) => !p);
-
-  return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
-      {/* Connection status */}
-      {connectionState !== "connected" && (
-        <div className="absolute top-0 left-0 right-0 z-50">
-          <div className="bg-yellow-600 text-white text-center py-2 text-sm">
-            {connectionState === "connecting"
-              ? "Connecting to meeting..."
-              : "Connection lost. Reconnecting..."}
-          </div>
-        </div>
-      )}
-
-      {/* Video grid */}
-      <div
-        ref={videoGridRef}
-        className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-4 auto-rows-fr"
-      >
-        {participants.map((p) => (
-          <div
-            key={p.identity}
-            className={`relative bg-slate-800 rounded-lg flex items-center justify-center min-h-[200px]
-                        ${p.isSpeaking ? "ring-2 ring-blue-500" : ""}`}
-          >
-            <div className="text-center">
-              <div className="w-16 h-16 bg-slate-600 rounded-full mx-auto mb-2 flex items-center justify-center text-2xl">
-                {p.name.charAt(0)}
-              </div>
-              <p className="text-slate-200 text-sm font-medium">{p.name}</p>
-              {p.isSpeaking && (
-                <span className="text-xs text-blue-400 mt-1 block">
-                  Speaking
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Caption overlay */}
-      {captionsEnabled && captionText && (
-        <div className="caption-overlay">
-          <span className="caption-speaker">{captionSpeaker}</span>
-          {captionText}
-        </div>
-      )}
-
-      {/* Controls bar */}
-      <div className="bg-slate-900 border-t border-slate-700 px-4 py-3">
-        <div className="flex items-center justify-center gap-4 flex-wrap">
-          <ControlButton
-            icon={micEnabled ? "🎤" : "🔇"}
-            label={micEnabled ? "Mute" : "Unmute"}
-            active={micEnabled}
-            onClick={handleToggleMic}
-          />
-          <ControlButton
-            icon={cameraEnabled ? "📷" : "📷❌"}
-            label={cameraEnabled ? "Camera" : "Camera Off"}
-            active={cameraEnabled}
-            onClick={handleToggleCamera}
-          />
-          <ControlButton
-            icon="🖥"
-            label={screenSharing ? "Stop Share" : "Share Screen"}
-            active={screenSharing}
-            onClick={handleToggleScreen}
-          />
-          <ControlButton
-            icon="💬"
-            label={captionsEnabled ? "Captions On" : "Captions Off"}
-            active={captionsEnabled}
-            onClick={handleToggleCaptions}
-          />
-
-          <div className="w-px h-8 bg-slate-700 mx-2" />
-
+  if (error) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-8 bg-slate-950">
+        <div className="text-center space-y-4">
+          <p className="text-red-400">{error}</p>
           <button
-            onClick={handleLeave}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm
-                       font-medium rounded-lg transition-colors"
+            onClick={() => router.push("/dashboard")}
+            className="px-4 py-2 bg-slate-700 text-white rounded-lg"
           >
-            Leave
+            Back to Dashboard
           </button>
         </div>
-      </div>
-    </div>
+      </main>
+    );
+  }
+
+  if (loading || !token) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-8 bg-slate-950">
+        <p className="text-slate-400">Connecting to meeting...</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-950">
+      <LiveKitRoom
+        token={token}
+        serverUrl={wsUrl}
+        connect={true}
+        video={true}
+        audio={true}
+        data-lk-theme="default"
+        style={{ height: "100vh" }}
+        onDisconnected={() => router.push("/dashboard")}
+      >
+        <div className="flex flex-col h-full">
+          <div className="flex-1">
+            <GridLayout tracks={[]}>
+              <MeetingVideoGrid />
+            </GridLayout>
+          </div>
+          <RoomAudioRenderer />
+          <div className="bg-slate-900 border-t border-slate-700">
+            <ControlBar />
+          </div>
+        </div>
+      </LiveKitRoom>
+    </main>
   );
 }
 
-function ControlButton({
-  icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: string;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+function MeetingVideoGrid() {
+  const tracks = useTracks(
+    [
+      { source: Track.Source.Camera, withPlaceholder: true },
+      { source: Track.Source.ScreenShare, withPlaceholder: false },
+    ],
+    { onlySubscribed: false }
+  );
+
   return (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg text-xs
-                  transition-colors ${
-                    active
-                      ? "bg-slate-700 text-slate-100 hover:bg-slate-600"
-                      : "bg-red-900/50 text-red-400 hover:bg-red-900"
-                  }`}
-    >
-      <span className="text-lg">{icon}</span>
-      <span>{label}</span>
-    </button>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-4 auto-rows-fr h-full">
+      {tracks.map((trackRef: TrackReference) => (
+        <ParticipantTile key={trackRef.publication?.trackSid} trackRef={trackRef} />
+      ))}
+    </div>
   );
 }

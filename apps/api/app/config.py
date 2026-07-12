@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
 
+    # Service tokens (separate from APP_SECRET_KEY)
+    caption_worker_service_token: str = "change-me-worker-service-token"
+
     # CORS
     cors_origins: str = "http://localhost:3000"
 
