@@ -12,9 +12,6 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-# ── Security middleware ──
-app.add_middleware(SecurityHeadersMiddleware)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")],
