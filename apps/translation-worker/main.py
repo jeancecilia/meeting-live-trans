@@ -1,6 +1,7 @@
 """
 Translation worker — polls API for active rooms, joins LiveKit hidden,
 subscribes to mic tracks, processes audio through OpenAI pipeline.
+One owner of caption delivery: drain queue and post after each frame.
 """
 
 import asyncio
@@ -112,7 +113,8 @@ async def process_audio(
             frame = event.frame
             await pipeline.process_audio_frame(frame.data.tobytes(), frame.sample_rate, frame.num_channels)
 
-            for ev in await pipeline.flush_captions():
+            # Worker is the sole owner of caption delivery
+            for ev in pipeline.drain_captions():
                 ev["meeting_id"] = meeting_id
                 async with httpx.AsyncClient(timeout=5.0) as c:
                     await c.post(
@@ -123,6 +125,18 @@ async def process_audio(
     except Exception as e:
         logger.error("Audio error %s: %s", pname, e)
     finally:
+        # Drain any remaining captions before stopping
+        for ev in pipeline.drain_captions():
+            ev["meeting_id"] = meeting_id
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as c:
+                    await c.post(
+                        f"{CAPTION_API_URL}/api/internal/meetings/{meeting_id}/caption-events",
+                        json=ev,
+                        headers={"Authorization": f"Bearer {WORKER_SERVICE_TOKEN}"},
+                    )
+            except Exception:
+                pass
         await pipeline.stop()
 
 

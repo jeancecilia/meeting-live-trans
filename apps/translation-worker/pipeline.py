@@ -1,8 +1,8 @@
 """
 Participant audio pipeline: LiveKit → normalize → OpenAI → translate → captions.
 
-Translates only completed transcription items. Caption emission runs
-in a dedicated task independent of audio frame arrival.
+Translates only completed transcription items. One caption queue owner:
+the worker drains and delivers through flush_captions().
 """
 
 import array
@@ -112,8 +112,6 @@ class ParticipantAudioPipeline:
     _rev: int = 0
     _queue: asyncio.Queue[dict] = field(default_factory=asyncio.Queue)
     _consumer: Optional[asyncio.Task] = None
-    _emitter: Optional[asyncio.Task] = None
-    _emitter_stop: Optional[asyncio.Event] = None
 
     async def start(self) -> None:
         self._state = PipelineState.STARTING
@@ -130,9 +128,7 @@ class ParticipantAudioPipeline:
         from translators import OpenAITranscribeThenTranslateProvider
         self._translation = OpenAITranscribeThenTranslateProvider(api_key, translation_model=xmodel)
 
-        self._emitter_stop = asyncio.Event()
         self._consumer = asyncio.create_task(self._consume())
-        self._emitter = asyncio.create_task(self._emit_loop())
         self._state = PipelineState.RUNNING
 
     async def process_audio_frame(self, data: bytes, sr: int, ch: int) -> None:
@@ -147,7 +143,7 @@ class ParticipantAudioPipeline:
             await self._transcription.append_audio(chunk)
 
     async def _consume(self) -> None:
-        """Consume transcription results. Translate only final items."""
+        """Translate only final transcripts. Put into queue for worker delivery."""
         try:
             while self._state == PipelineState.RUNNING and self._transcription:
                 try:
@@ -181,40 +177,34 @@ class ParticipantAudioPipeline:
         except Exception as e:
             logger.error("Consumer error %s: %s", self.participant_name, e)
 
-    async def _emit_loop(self) -> None:
-        """Continuously drain the caption queue regardless of audio frames."""
-        try:
-            while not self._emitter_stop.is_set():
-                try:
-                    event = await asyncio.wait_for(self._queue.get(), timeout=0.5)
-                    # Mark meeting_id as needing fill by caller (worker sets it)
-                    # The event is consumed by flush_captions()
-                except asyncio.TimeoutError:
-                    continue
-        except asyncio.CancelledError:
-            pass
-
-    async def flush_captions(self) -> list[dict]:
+    def drain_captions(self) -> list[dict]:
+        """Non-blocking drain of the caption queue."""
         out = []
         while not self._queue.empty():
-            out.append(await self._queue.get())
+            try:
+                out.append(self._queue.get_nowait())
+            except asyncio.QueueEmpty:
+                break
         return out
 
     async def stop(self) -> None:
+        """Graceful shutdown: commit pending audio, drain final captions, close."""
         self._state = PipelineState.STOPPING
 
-        # Commit any pending audio before closing
         if self._transcription:
             await self._transcription.commit_pending()
 
-        if self._emitter_stop:
-            self._emitter_stop.set()
+        # Wait briefly for final transcript and translation
+        await asyncio.sleep(2.0)
+
         if self._consumer:
             self._consumer.cancel()
+            try:
+                await self._consumer
+            except asyncio.CancelledError:
+                pass
             self._consumer = None
-        if self._emitter:
-            self._emitter.cancel()
-            self._emitter = None
+
         if self._transcription:
             await self._transcription.stop()
         self._state = PipelineState.IDLE
