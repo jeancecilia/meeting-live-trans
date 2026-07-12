@@ -14,8 +14,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("UPDATE users SET preferred_caption_language = 'en' WHERE email = 'english@internal.local'")
-    op.execute("UPDATE users SET preferred_caption_language = 'th' WHERE email = 'thai@internal.local'")
+    op.execute("UPDATE users SET preferred_caption_language = 'en' WHERE email = 'english@meetingtest.com'")
+    op.execute("UPDATE users SET preferred_caption_language = 'th' WHERE email = 'thai@meetingtest.com'")
 
 
 def downgrade() -> None:

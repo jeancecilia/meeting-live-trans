@@ -23,8 +23,12 @@ export default function LoginPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || "Login failed");
+        let detail = "Login failed";
+        try {
+          const data = await res.json();
+          detail = data.detail || JSON.stringify(data);
+        } catch {}
+        throw new Error(detail);
       }
 
       const tokens = await res.json();
@@ -32,7 +36,8 @@ export default function LoginPage() {
       localStorage.setItem("refresh_token", tokens.refresh_token);
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg || "Login failed");
     } finally {
       setLoading(false);
     }

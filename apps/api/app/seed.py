@@ -35,10 +35,10 @@ async def seed() -> None:
 
     async with async_session() as db:
         # English-speaking internal user — expects to see English captions
-        r = await db.execute(select(User).where(User.email == "english@internal.local"))
+        r = await db.execute(select(User).where(User.email == "english@meetingtest.com"))
         if not r.scalar_one_or_none():
             db.add(User(
-                email="english@internal.local",
+                email="english@meetingtest.com",
                 password_hash=hash_password(en_pw),
                 display_name="English Speaker",
                 role="host",
@@ -48,10 +48,10 @@ async def seed() -> None:
             ))
 
         # Thai-speaking internal user — expects to see Thai captions
-        r = await db.execute(select(User).where(User.email == "thai@internal.local"))
+        r = await db.execute(select(User).where(User.email == "thai@meetingtest.com"))
         if not r.scalar_one_or_none():
             db.add(User(
-                email="thai@internal.local",
+                email="thai@meetingtest.com",
                 password_hash=hash_password(th_pw),
                 display_name="Thai Speaker",
                 role="internal_partner",
