@@ -1,14 +1,18 @@
 """
 Translation worker entry point (MTG-030).
 
-Subscribes to Redis for room dispatch, joins LiveKit rooms as a hidden
+Polls the API for active meeting rooms, joins LiveKit rooms as a hidden
 service participant, processes individual microphone tracks, and routes
 translated captions to the FastAPI caption ingest endpoint.
+
+In production, room dispatch uses Redis pub/sub instead of polling.
 """
 
 import asyncio
 import logging
 import os
+
+import httpx
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,6 +26,47 @@ LIVEKIT_API_KEY = os.environ.get("LIVEKIT_API_KEY", "devkey")
 LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "secret")
 CAPTION_API_URL = os.environ.get("CAPTION_API_URL", "http://localhost:8000")
 WORKER_SERVICE_TOKEN = os.environ.get("CAPTION_WORKER_SERVICE_TOKEN", "change-me")
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
+POLL_INTERVAL_SECONDS = int(os.environ.get("WORKER_POLL_INTERVAL", "5"))
+
+# Track rooms we're already handling
+_active_room_tasks: dict[str, asyncio.Task] = {}
+
+
+async def dispatch_rooms() -> None:
+    """
+    Poll the API for active rooms and dispatch worker tasks.
+
+    Production: subscribe to Redis pub/sub for room events instead.
+    """
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                # Get list of meetings with status=active that need workers
+                resp = await client.get(
+                    f"{API_URL}/api/internal/active-rooms",
+                    headers={"Authorization": f"Bearer {WORKER_SERVICE_TOKEN}"},
+                )
+                if resp.status_code == 200:
+                    rooms = resp.json()
+                    for room in rooms:
+                        room_name = room["room_name"]
+                        meeting_id = room["id"]
+                        if room_name not in _active_room_tasks:
+                            logger.info("Dispatching worker to room: %s (meeting=%s)", room_name, meeting_id)
+                            task = asyncio.create_task(handle_room(meeting_id, room_name))
+                            _active_room_tasks[room_name] = task
+
+                # Clean up finished tasks
+                finished = [name for name, task in _active_room_tasks.items() if task.done()]
+                for name in finished:
+                    del _active_room_tasks[name]
+                    logger.info("Room task completed: %s", name)
+
+        except Exception as e:
+            logger.error("Room dispatch error: %s", e)
+
+        await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
 async def handle_room(meeting_id: str, room_name: str) -> None:
@@ -53,7 +98,11 @@ async def handle_room(meeting_id: str, room_name: str) -> None:
     room = rtc.Room()
 
     @room.on("track_subscribed")
-    def on_track_subscribed(track: rtc.Track, publication: rtc.RemoteTrackPublication, participant: rtc.RemoteParticipant):
+    def on_track_subscribed(
+        track: rtc.Track,
+        publication: rtc.RemoteTrackPublication,
+        participant: rtc.RemoteParticipant,
+    ):
         if track.kind != rtc.TrackKind.KIND_AUDIO:
             return
 
@@ -64,7 +113,6 @@ async def handle_room(meeting_id: str, room_name: str) -> None:
             track.sid,
         )
 
-        # Create audio stream and process frames
         audio_stream = rtc.AudioStream(track)
         asyncio.create_task(process_audio_stream(
             meeting_id=meeting_id,
@@ -81,7 +129,6 @@ async def handle_room(meeting_id: str, room_name: str) -> None:
         await room.connect(LIVEKIT_HOST, token)
         logger.info("Worker joined room: %s (meeting=%s)", room_name, meeting_id)
 
-        # Keep running until room disconnects
         while room.connection_state != rtc.ConnectionState.CONN_DISCONNECTED:
             await asyncio.sleep(1)
 
@@ -104,10 +151,7 @@ async def process_audio_stream(
     Pipeline: LiveKit frame → normalize → OpenAI → translate → caption API
     """
     from pipeline import ParticipantAudioPipeline
-    import httpx
 
-    # Determine languages from participant identity metadata
-    # In production, this reads from the LiveKit participant attributes
     spoken_language = "en"
     caption_language = "th"
 
@@ -121,14 +165,12 @@ async def process_audio_stream(
 
     try:
         async for frame in audio_stream:
-            # frame.data contains PCM16 audio bytes
             pcm_data = bytes(frame.data) if hasattr(frame.data, "tobytes") else frame.data
             sample_rate = getattr(frame, "sample_rate", 24000)
             channels = getattr(frame, "num_channels", 1)
 
             await pipeline.process_audio_frame(pcm_data, sample_rate, channels)
 
-            # Emit buffered captions
             caption_events = await pipeline.flush_captions()
             for event in caption_events:
                 async with httpx.AsyncClient(timeout=5.0) as client:
@@ -146,16 +188,10 @@ async def process_audio_stream(
 async def main() -> None:
     logger.info("Translation worker starting...")
     logger.info("LiveKit host: %s", LIVEKIT_HOST)
+    logger.info("Poll interval: %ds", POLL_INTERVAL_SECONDS)
 
-    # In production: subscribe to Redis pub/sub for room dispatch events
-    # For MVP: poll the API for active rooms or accept room assignments
-    try:
-        while True:
-            await asyncio.sleep(10)
-    except asyncio.CancelledError:
-        logger.info("Worker shutting down...")
-    except KeyboardInterrupt:
-        logger.info("Worker stopped.")
+    # Start room dispatch loop
+    await dispatch_rooms()
 
 
 if __name__ == "__main__":

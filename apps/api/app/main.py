@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.security import SecurityHeadersMiddleware
-from app.routers import auth, captions, invites, livekit, meetings, webhooks
+from app.routers import active_rooms, auth, captions, invites, livekit, meetings, webhooks
 
 app = FastAPI(
     title="Meeting Live Trans API",
@@ -24,6 +24,7 @@ app.add_middleware(
 )
 
 # ── Register routers ──
+app.include_router(active_rooms.router)
 app.include_router(auth.router)
 app.include_router(meetings.router)
 app.include_router(invites.router)
