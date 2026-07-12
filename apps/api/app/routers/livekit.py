@@ -1,16 +1,17 @@
 """LiveKit token generation routes (MTG-022).
 
 Generates short-lived LiveKit participant tokens with embedded
-application metadata. Permissions are validated server-side and
-never trusted from browser input.
+application metadata. Guest tokens require a signed guest-session JWT.
+Permissions are validated server-side and never trusted from browser input.
 """
 
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from jose import JWTError, jwt
 from livekit import api as lk_api
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -26,12 +27,6 @@ from app.models.user import User
 router = APIRouter(tags=["livekit"])
 
 
-class LiveKitTokenRequest(BaseModel):
-    meeting_id: uuid.UUID
-    participant_identity: str
-    display_name: str
-
-
 class LiveKitTokenResponse(BaseModel):
     token: str
     ws_url: str
@@ -39,15 +34,47 @@ class LiveKitTokenResponse(BaseModel):
 
 
 class GuestTokenRequest(BaseModel):
-    meeting_id: uuid.UUID
-    guest_identity: str
+    guest_session_token: str  # Signed JWT from join flow
     display_name: str
-    spoken_language: str = "en"
+
+
+def _create_guest_session_token(
+    meeting_id: str,
+    guest_identity: str,
+    spoken_language: str,
+    invite_id: str,
+    ttl_minutes: int = 30,
+) -> str:
+    """Create a signed guest-session JWT after invite validation."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)
+    payload = {
+        "sub": guest_identity,
+        "meeting_id": meeting_id,
+        "spoken_language": spoken_language,
+        "invite_id": invite_id,
+        "role": "guest",
+        "type": "guest_session",
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, settings.app_secret_key, algorithm="HS256")
+
+
+def _decode_guest_session(token: str) -> dict:
+    """Decode and validate a guest-session JWT."""
+    try:
+        payload = jwt.decode(token, settings.app_secret_key, algorithms=["HS256"])
+        if payload.get("type") != "guest_session":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired guest session")
 
 
 def _create_livekit_token(
     identity: str,
     display_name: str,
+    room_name: str,
     metadata: dict,
     ttl_minutes: int = 30,
 ) -> str:
@@ -61,12 +88,14 @@ def _create_livekit_token(
     token.with_grants(
         lk_api.VideoGrants(
             room_join=True,
-            room=metadata.get("meeting_id", ""),
+            room=room_name,
             can_publish=True,
             can_subscribe=True,
         )
     )
-    token.with_metadata("\n".join(f"{k}:{v}" for k, v in metadata.items() if v))
+    # Store metadata as string (LiveKit format)
+    meta_str = "; ".join(f"{k}:{v}" for k, v in metadata.items() if v)
+    token.with_metadata(meta_str)
     token.ttl = ttl_minutes * 60
     return token.to_jwt()
 
@@ -86,32 +115,47 @@ async def get_internal_livekit_token(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Meeting has ended")
 
     identity = f"internal_{user.id.hex[:12]}"
-    caption_language = (
-        "th" if user.preferred_spoken_language == "en" else "en"
-    )
+    caption_language = "th" if user.preferred_spoken_language == "en" else "en"
 
     metadata = {
         "app_role": user.role,
         "spoken_language": user.preferred_spoken_language,
         "caption_language": caption_language,
         "caption_access": "true",
-        "meeting_id": str(meeting_id),
     }
 
-    token = _create_livekit_token(identity, user.display_name, metadata)
-
-    # Record participant
-    participant = MeetingParticipant(
-        meeting_id=meeting_id,
-        user_id=user.id,
-        livekit_identity=identity,
+    token = _create_livekit_token(
+        identity=identity,
         display_name=user.display_name,
-        role=user.role,
-        spoken_language=user.preferred_spoken_language,
-        caption_language=caption_language,
-        caption_access=True,
+        room_name=meeting.room_name,
+        metadata=metadata,
     )
-    db.add(participant)
+
+    # Upsert participant (allows reconnection)
+    existing = await db.execute(
+        select(MeetingParticipant).where(
+            MeetingParticipant.meeting_id == meeting_id,
+            MeetingParticipant.livekit_identity == identity,
+        )
+    )
+    participant = existing.scalar_one_or_none()
+
+    if participant:
+        participant.joined_at = datetime.now(timezone.utc)
+        participant.left_at = None
+    else:
+        participant = MeetingParticipant(
+            meeting_id=meeting_id,
+            user_id=user.id,
+            livekit_identity=identity,
+            display_name=user.display_name,
+            role=user.role,
+            spoken_language=user.preferred_spoken_language,
+            caption_language=caption_language,
+            caption_access=True,
+        )
+        db.add(participant)
+
     await db.commit()
 
     return LiveKitTokenResponse(
@@ -127,7 +171,18 @@ async def get_guest_livekit_token(
     body: GuestTokenRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LiveKitTokenResponse:
-    """Generate a LiveKit token for a guest participant (no caption access)."""
+    """
+    Generate a LiveKit token for a guest participant.
+
+    Requires a signed guest-session JWT from the invitation join flow.
+    The guest cannot supply their own meeting_id or identity.
+    """
+    session = _decode_guest_session(body.guest_session_token)
+
+    # Validate session claims match request
+    if session["meeting_id"] != str(meeting_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Session not valid for this meeting")
+
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
     if not meeting:
@@ -135,35 +190,48 @@ async def get_guest_livekit_token(
     if meeting.status == "ended":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Meeting has ended")
 
-    if body.spoken_language not in ("en", "th"):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="spoken_language must be 'en' or 'th'",
-        )
+    identity = session["sub"]  # guest_identity from join flow
+    spoken_language = session.get("spoken_language", "en")
 
-    identity = body.guest_identity
     metadata = {
         "app_role": "guest",
-        "spoken_language": body.spoken_language,
-        "caption_language": "",
+        "spoken_language": spoken_language,
         "caption_access": "false",
-        "meeting_id": str(meeting_id),
     }
 
-    token = _create_livekit_token(identity, body.display_name, metadata)
-
-    participant = MeetingParticipant(
-        meeting_id=meeting_id,
-        user_id=None,
-        guest_identity=identity,
-        livekit_identity=identity,
+    token = _create_livekit_token(
+        identity=identity,
         display_name=body.display_name,
-        role="guest",
-        spoken_language=body.spoken_language,
-        caption_language=None,
-        caption_access=False,
+        room_name=meeting.room_name,
+        metadata=metadata,
     )
-    db.add(participant)
+
+    # Upsert participant
+    existing = await db.execute(
+        select(MeetingParticipant).where(
+            MeetingParticipant.meeting_id == meeting_id,
+            MeetingParticipant.livekit_identity == identity,
+        )
+    )
+    participant = existing.scalar_one_or_none()
+
+    if participant:
+        participant.joined_at = datetime.now(timezone.utc)
+        participant.left_at = None
+    else:
+        participant = MeetingParticipant(
+            meeting_id=meeting_id,
+            user_id=None,
+            guest_identity=identity,
+            livekit_identity=identity,
+            display_name=body.display_name,
+            role="guest",
+            spoken_language=spoken_language,
+            caption_language=None,
+            caption_access=False,
+        )
+        db.add(participant)
+
     await db.commit()
 
     return LiveKitTokenResponse(

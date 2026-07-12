@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,9 +17,8 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await apiFetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
@@ -42,17 +42,13 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center p-8">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-100">
-            Meeting Live Trans
-          </h1>
+          <h1 className="text-2xl font-bold text-slate-100">Meeting Live Trans</h1>
           <p className="text-slate-400 mt-1">Sign in to your account</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Email
-            </label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
             <input
               type="email"
               value={email}
@@ -66,9 +62,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Password
-            </label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
             <input
               type="password"
               value={password}
@@ -81,9 +75,7 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <p className="text-red-400 text-sm bg-red-900/20 rounded p-2">
-              {error}
-            </p>
+            <p className="text-red-400 text-sm bg-red-900/20 rounded p-2">{error}</p>
           )}
 
           <button

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 interface InvitePreview {
   guest_name: string;
@@ -22,11 +23,10 @@ export default function JoinPage() {
   useEffect(() => {
     async function fetchPreview() {
       try {
-        const res = await fetch(`/api/public/invites/${token}`);
+        const res = await apiFetch(`/api/public/invites/${token}`);
         if (!res.ok) throw new Error("Invite not found or expired");
-        const data = await res.json();
-        setPreview(data);
-      } catch (err) {
+        setPreview(await res.json());
+      } catch {
         setError("This invitation link is invalid or has expired.");
       }
     }
@@ -37,15 +37,15 @@ export default function JoinPage() {
     if (!displayName.trim()) return;
     setJoining(true);
     try {
-      const res = await fetch(`/api/public/invites/${token}/join`, {
+      const res = await apiFetch(`/api/public/invites/${token}/join`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ display_name: displayName }),
       });
       if (!res.ok) throw new Error("Join failed");
       const data = await res.json();
 
-      // Store guest info and redirect to meeting
+      // Store guest session for LiveKit token flow
+      sessionStorage.setItem("guest_session_token", data.guest_session_token);
       sessionStorage.setItem("guest_identity", data.guest_identity);
       sessionStorage.setItem("meeting_id", data.meeting_id);
       sessionStorage.setItem(
@@ -65,9 +65,7 @@ export default function JoinPage() {
       <main className="flex min-h-screen items-center justify-center p-8">
         <div className="max-w-md text-center space-y-4">
           <div className="text-red-400 text-5xl mb-4">⚠</div>
-          <h1 className="text-2xl font-bold text-slate-100">
-            Cannot Join Meeting
-          </h1>
+          <h1 className="text-2xl font-bold text-slate-100">Cannot Join Meeting</h1>
           <p className="text-slate-400">{error}</p>
         </div>
       </main>
@@ -86,9 +84,7 @@ export default function JoinPage() {
     return (
       <main className="flex min-h-screen items-center justify-center p-8">
         <div className="max-w-md text-center space-y-4">
-          <h1 className="text-2xl font-bold text-slate-100">
-            Invitation Expired
-          </h1>
+          <h1 className="text-2xl font-bold text-slate-100">Invitation Expired</h1>
           <p className="text-slate-400">
             This invitation is no longer valid. Please request a new link.
           </p>
@@ -101,14 +97,10 @@ export default function JoinPage() {
     <main className="flex min-h-screen items-center justify-center p-8">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold text-slate-100">
-            {preview.meeting_title}
-          </h1>
+          <h1 className="text-2xl font-bold text-slate-100">{preview.meeting_title}</h1>
           <p className="text-slate-400">
             You're invited as{" "}
-            <span className="text-slate-200 font-medium">
-              {preview.guest_name}
-            </span>
+            <span className="text-slate-200 font-medium">{preview.guest_name}</span>
           </p>
         </div>
 
@@ -132,9 +124,7 @@ export default function JoinPage() {
             <p>
               Spoken language:{" "}
               <span className="text-slate-200 font-medium">
-                {preview.expected_spoken_language === "en"
-                  ? "English"
-                  : "Thai"}
+                {preview.expected_spoken_language === "en" ? "English" : "Thai"}
               </span>
             </p>
           </div>

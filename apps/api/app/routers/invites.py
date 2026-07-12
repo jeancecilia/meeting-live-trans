@@ -1,7 +1,8 @@
 """Guest invitation routes (MTG-021).
 
-Invite tokens are stored as SHA-256 hashes. The raw token is returned
-once at creation time and never stored in plaintext.
+Invite tokens are stored as SHA-256 hashes. Raw token returned once.
+Transactional invite consumption prevents race conditions.
+Join returns a signed guest-session JWT for the LiveKit token flow.
 """
 
 import hashlib
@@ -20,6 +21,7 @@ from app.database import get_db
 from app.models.meeting import Meeting
 from app.models.meeting_invite import MeetingInvite
 from app.models.user import User
+from app.routers.livekit import _create_guest_session_token
 
 router = APIRouter(tags=["invites"])
 
@@ -38,7 +40,6 @@ class InviteResponse(BaseModel):
     guest_name: str
     expires_at: str
     max_uses: int
-    model_config = {"from_attributes": True}
 
 
 class InvitePreviewResponse(BaseModel):
@@ -56,6 +57,7 @@ class JoinRequest(BaseModel):
 class JoinResponse(BaseModel):
     meeting_id: uuid.UUID
     guest_identity: str
+    guest_session_token: str
     role: str = "guest"
     caption_access: bool = False
 
@@ -82,7 +84,6 @@ async def create_invite(
     user: Annotated[User, Depends(require_internal_role)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> InviteResponse:
-    # Validate meeting exists and is not ended
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
     if not meeting:
@@ -165,7 +166,6 @@ async def preview_invite(
         and invite.use_count < invite.max_uses
     )
 
-    # Fetch meeting title
     meeting_result = await db.execute(select(Meeting).where(Meeting.id == invite.meeting_id))
     meeting = meeting_result.scalar_one_or_none()
     if not meeting or meeting.status == "ended":
@@ -186,23 +186,30 @@ async def join_with_invite(
     body: JoinRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> JoinResponse:
+    """
+    Join a meeting using an invite token.
+
+    Uses transactional invite consumption to prevent race conditions.
+    Returns a signed guest-session JWT for the LiveKit token flow.
+    """
     token_hash = _hash_token(token)
+    now = datetime.now(timezone.utc)
+
+    # Transactional consumption: lock the row, validate, increment
     result = await db.execute(
-        select(MeetingInvite).where(MeetingInvite.token_hash == token_hash)
+        select(MeetingInvite)
+        .where(MeetingInvite.token_hash == token_hash)
+        .with_for_update()
     )
     invite = result.scalar_one_or_none()
 
     if not invite:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found")
 
-    now = datetime.now(timezone.utc)
-
     if invite.revoked_at is not None:
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite has been revoked")
-
     if invite.expires_at <= now:
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite has expired")
-
     if invite.use_count >= invite.max_uses:
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Invite usage limit reached")
 
@@ -213,15 +220,25 @@ async def join_with_invite(
     if meeting.status == "ended":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Meeting has ended")
 
-    # Increment usage
+    # Consume the invite
     invite.use_count += 1
-    await db.commit()
 
     guest_identity = f"guest_{secrets.token_hex(8)}"
+
+    # Create signed guest-session JWT
+    guest_session_token = _create_guest_session_token(
+        meeting_id=str(meeting.id),
+        guest_identity=guest_identity,
+        spoken_language=invite.expected_spoken_language,
+        invite_id=str(invite.id),
+    )
+
+    await db.commit()
 
     return JoinResponse(
         meeting_id=meeting.id,
         guest_identity=guest_identity,
+        guest_session_token=guest_session_token,
         role="guest",
         caption_access=False,
     )

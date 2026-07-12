@@ -36,35 +36,44 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Lint (Python)
+      - name: Lint (API)
         if: matrix.service == 'api'
         run: |
           pip install ruff
           cd apps/api && ruff check .
 
-      - name: Type Check (Python)
+      - name: Type Check (API)
         if: matrix.service == 'api'
         run: |
           pip install mypy
-          cd apps/api && mypy app/ --ignore-missing-imports || true
-
-      - name: Lint (Web)
-        if: matrix.service == 'web'
-        run: |
-          cd apps/web && npm ci && npm run lint || true
-
-      - name: Type Check (Web)
-        if: matrix.service == 'web'
-        run: |
-          cd apps/web && npx tsc --noEmit || true
+          cd apps/api && mypy app/ --ignore-missing-imports
 
       - name: Unit Tests (API)
         if: matrix.service == 'api'
         run: |
           cd apps/api
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio httpx
           python -m pytest tests/ -v
+
+      - name: Lint & Type Check (Web)
+        if: matrix.service == 'web'
+        run: |
+          cd apps/web && npm ci && npm run lint && npx tsc --noEmit
+
+      - name: Lint (Translation Worker)
+        if: matrix.service == 'translation-worker'
+        run: |
+          pip install ruff
+          cd apps/translation-worker && ruff check .
+
+      - name: Unit Tests (Translation Worker)
+        if: matrix.service == 'translation-worker'
+        run: |
+          cd apps/translation-worker
+          pip install -e .
+          pip install pytest pytest-asyncio
+          python -m pytest ../api/tests/ -v -k "reliability or security or captions" --ignore-glob="*integration*"
 
   build-containers:
     needs: lint-and-test
@@ -92,8 +101,9 @@ jobs:
 
       - name: Check for exposed secrets
         run: |
-          ! grep -r "sk-" --include="*.py" --include="*.ts" --include="*.tsx" apps/ || true
-          ! grep -r "password" --include="*.py" apps/api/tests/ || true
+          if grep -r "sk-" --include="*.py" --include="*.ts" --include="*.tsx" apps/; then
+            echo "WARNING: Potential API keys found in source"
+          fi
 
   deploy:
     needs: build-containers
@@ -103,4 +113,3 @@ jobs:
     steps:
       - name: Deploy placeholder
         run: echo "Deploy to staging environment"
-      # Production deployment uses docker compose pull + up on VPS

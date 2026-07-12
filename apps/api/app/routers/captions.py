@@ -1,13 +1,9 @@
 """
 Private caption routing (MTG-035).
 
-Caption WebSocket endpoint that:
-1. Authenticates the user (valid logged-in internal user)
-2. Checks user belongs to the meeting
-3. Verifies caption_access = true
-4. Routes captions only to matching internal recipients
-
-Guests receive HTTP 403. No caption payload is broadcast to the room.
+Caption WebSocket endpoint with real authentication and authorization.
+Internal endpoint for the translation worker to submit caption events.
+Guest connections always receive HTTP 403.
 """
 
 import json
@@ -15,23 +11,43 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from jose import JWTError, jwt
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_current_user
+from app.config import settings
 from app.database import get_db
 from app.models.meeting import Meeting
 from app.models.meeting_participant import MeetingParticipant
-from app.models.user import User
 
 logger = logging.getLogger("api.captions")
 
 router = APIRouter(tags=["captions"])
 
-# Connected caption subscribers: meeting_id → {participant_id → WebSocket}
-_subscribers: dict[str, dict[str, WebSocket]] = {}
+# Connected caption subscribers: meeting_id → {participant_id → {"ws": WebSocket, "lang": str}}
+_subscribers: dict[str, dict[str, dict[str, Any]]] = {}
 
+
+# ──── Caption event schema ────
+
+class CaptionEventRequest(BaseModel):
+    type: str  # "caption.delta" or "caption.final"
+    event_id: str
+    meeting_id: str
+    speaker_id: str
+    speaker_name: str
+    source_language: str
+    target_language: str
+    translated_text: str
+    sequence: int
+    revision: int
+    is_final: bool
+    started_at: str | None = None
+
+
+# ──── WebSocket endpoint ────
 
 @router.websocket("/api/ws/meetings/{meeting_id}/captions")
 async def caption_websocket(
@@ -41,56 +57,101 @@ async def caption_websocket(
     """
     Private caption WebSocket endpoint.
 
-    Authorization checks (in order):
-    1. Valid logged-in internal user
-    2. User belongs to the meeting
-    3. caption_access = true
-    4. Meeting is active
-    5. Requested caption language matches allowed language
+    Authorization checks:
+    1. Valid JWT token in query param
+    2. Token belongs to an internal user (host or internal_partner)
+    3. User is a participant in this meeting
+    4. Participant has caption_access = True
+    5. Meeting is active
     """
-    # Accept the connection first, then validate
     await websocket.accept()
 
+    participant_id = "unknown"
+    caption_language = "th"
+
     try:
-        # Validate meeting exists and is active
-        # In production, this uses the authenticated user from a query param token
-        # since WebSocket upgrade requests don't carry Authorization headers cleanly
+        # 1. Validate JWT token
         token = websocket.query_params.get("token", "")
         if not token:
-            await websocket.send_json({"type": "error", "detail": "Missing authentication token"})
             await websocket.close(code=4001, reason="Missing token")
             return
 
-        # Token validation would happen here via decode_token()
-        # For now, accept and register the subscriber
+        try:
+            payload = jwt.decode(token, settings.app_secret_key, algorithms=["HS256"])
+        except JWTError:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
 
-        # Register as a caption subscriber
-        participant_id = websocket.query_params.get("participant_id", str(uuid.uuid4()))
-        caption_language = websocket.query_params.get("caption_language", "th")
+        if payload.get("type") != "access":
+            await websocket.close(code=4001, reason="Invalid token type")
+            return
 
+        user_id = payload.get("sub")
+        if not user_id:
+            await websocket.close(code=4001, reason="Missing user identifier")
+            return
+
+        # 2. Check internal role
+        role = payload.get("role", "")
+        if role not in ("host", "internal_partner"):
+            await websocket.close(code=4003, reason="Guest caption access denied")
+            return
+
+        # 3. Check participant record
+        async with async_session() as db:
+            result = await db.execute(
+                select(MeetingParticipant).where(
+                    MeetingParticipant.meeting_id == uuid.UUID(meeting_id),
+                    MeetingParticipant.user_id == uuid.UUID(user_id),
+                )
+            )
+            participant = result.scalar_one_or_none()
+
+            if not participant:
+                await websocket.close(code=4003, reason="Not a participant of this meeting")
+                return
+
+            # 4. Check caption_access
+            if not participant.caption_access:
+                await websocket.close(code=4003, reason="Caption access not authorized")
+                return
+
+            # 5. Check meeting is active
+            meeting_result = await db.execute(
+                select(Meeting).where(Meeting.id == uuid.UUID(meeting_id))
+            )
+            meeting = meeting_result.scalar_one_or_none()
+            if not meeting or meeting.status == "ended":
+                await websocket.close(code=4003, reason="Meeting not active")
+                return
+
+            participant_id = participant.livekit_identity
+            caption_language = participant.caption_language or "th"
+
+        # Register subscriber
         if meeting_id not in _subscribers:
             _subscribers[meeting_id] = {}
 
-        _subscribers[meeting_id][participant_id] = websocket
+        _subscribers[meeting_id][participant_id] = {
+            "ws": websocket,
+            "lang": caption_language,
+        }
+
         logger.info(
-            "Caption subscriber connected: meeting=%s, participant=%s, lang=%s",
+            "Caption subscriber connected: meeting=%s participant=%s lang=%s",
             meeting_id,
             participant_id,
             caption_language,
         )
 
-        # Keep the connection alive and handle incoming messages
+        # Keep alive and handle pings
         while True:
             try:
                 message = await websocket.receive_text()
                 data = json.loads(message)
-
                 if data.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
-
             except WebSocketDisconnect:
-                break
-            except Exception:
                 break
 
     except WebSocketDisconnect:
@@ -98,43 +159,77 @@ async def caption_websocket(
     except Exception as e:
         logger.error("Caption WebSocket error: %s", e)
     finally:
-        # Cleanup subscriber
         if meeting_id in _subscribers:
             _subscribers[meeting_id].pop(participant_id, None)
             if not _subscribers[meeting_id]:
                 del _subscribers[meeting_id]
-            logger.info(
-                "Caption subscriber disconnected: meeting=%s, participant=%s",
-                meeting_id,
-                participant_id,
-            )
 
 
-async def route_caption_event(
+# ──── Internal caption ingest endpoint ────
+
+@router.post("/api/internal/meetings/{meeting_id}/caption-events")
+async def ingest_caption_event(
+    meeting_id: str,
+    event: CaptionEventRequest,
+    request: Request,
+) -> dict:
+    """
+    Internal endpoint for the translation worker to submit caption events.
+
+    Protected by service-to-service token via Authorization header.
+    """
+    # Validate service token
+    auth_header = request.headers.get("Authorization", "")
+    expected = f"Bearer {settings.app_secret_key}"
+    if auth_header != expected:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid service token")
+
+    # Validate meeting_id matches event
+    if event.meeting_id != meeting_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="meeting_id mismatch")
+
+    # Route to subscribers with language filtering
+    routed_count = await _route_caption_event(meeting_id, event.model_dump())
+
+    return {"status": "ok", "routed_to": routed_count}
+
+
+# ──── Routing function ────
+
+async def _route_caption_event(
     meeting_id: str,
     caption_event: dict,
-) -> None:
+) -> int:
     """
-    Route a caption event to the appropriate internal subscribers.
+    Route a caption event only to subscribers whose caption language matches.
 
-    Routing logic:
-    - English speaker → route Thai translation to Thai-caption subscribers
-    - Thai speaker → route English translation to English-caption subscribers
-    - Guest → never receives caption events
+    - English speaker → Thai translation → Thai-caption subscribers only
+    - Thai speaker → English translation → English-caption subscribers only
+    - Subscribers with mismatched languages do not receive the event
     """
     if meeting_id not in _subscribers:
-        return
+        return 0
 
     target_language = caption_event.get("target_language", "")
-
+    routed = 0
     disconnected = []
-    for participant_id, ws in _subscribers[meeting_id].items():
+
+    for pid, sub in _subscribers[meeting_id].items():
+        # Only send if subscriber's caption language matches the translation target
+        if sub["lang"] != target_language:
+            continue
+
         try:
-            # Only send to subscribers whose caption language matches
-            # In production, each subscriber's caption_language is tracked
-            await ws.send_json(caption_event)
+            await sub["ws"].send_json(caption_event)
+            routed += 1
         except Exception:
-            disconnected.append(participant_id)
+            disconnected.append(pid)
 
     for pid in disconnected:
         _subscribers[meeting_id].pop(pid, None)
+
+    return routed
+
+
+# Import at bottom to avoid circular dependency
+from app.database import async_session

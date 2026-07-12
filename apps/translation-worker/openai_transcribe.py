@@ -2,19 +2,25 @@
 OpenAI realtime transcription provider (MTG-032).
 
 Implements the RealtimeTranscriptionProvider interface using the
-OpenAI Realtime WebSocket API for gpt-realtime-whisper.
+OpenAI Realtime Transcription WebSocket API.
 
-Handles:
+Session configuration follows the current transcription protocol:
+- session.type = "transcription"
+- audio.input.format: pcm16, 24000 Hz, mono
+- model: gpt-realtime-whisper or configured equivalent
+- Manual audio buffer commits when turn detection is disabled
+
+Events handled:
 - conversation.item.input_audio_transcription.delta
 - conversation.item.input_audio_transcription.completed
 - error
-- connection closed
+- session.created / session.updated
 """
 
 import asyncio
+import base64
 import json
 import logging
-import time
 from typing import Optional
 
 import websockets
@@ -23,7 +29,6 @@ from pipeline import RealtimeTranscriptionProvider, TranscriptionResult
 
 logger = logging.getLogger("translation-worker.openai-transcribe")
 
-# Reconnect configuration (bounded exponential backoff)
 MAX_RECONNECT_DELAY = 30.0
 BASE_RECONNECT_DELAY = 1.0
 
@@ -52,16 +57,17 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
         self._event_queue: asyncio.Queue[TranscriptionResult] = asyncio.Queue()
         self._pending_items: dict[str, str] = {}  # item_id → partial text
         self._receive_task: Optional[asyncio.Task] = None
+        self._should_reconnect: bool = True
 
     # ──── Connection management ────
 
     async def start(self, language: str) -> None:
-        """Open WebSocket and initialize the transcription session."""
         self._language = language
+        self._should_reconnect = True
         await self._connect()
 
     async def stop(self) -> None:
-        """Close the WebSocket and cleanup."""
+        self._should_reconnect = False
         self._connected = False
         if self._receive_task:
             self._receive_task.cancel()
@@ -71,10 +77,9 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
             self._ws = None
 
     async def _connect(self) -> None:
-        """Establish WebSocket connection with bounded exponential backoff."""
         url = f"{self._base_url}?model={self._model}"
 
-        while True:
+        while self._should_reconnect:
             try:
                 self._ws = await websockets.connect(
                     url,
@@ -86,50 +91,69 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
                     ping_timeout=10,
                 )
 
-                # Configure the session for transcription
+                # Configure transcription session per current protocol
                 await self._ws.send(json.dumps({
                     "type": "session.update",
                     "session": {
-                        "modalities": ["text"],
-                        "input_audio_transcription": {
-                            "model": "whisper-1",
-                            "language": self._language,
+                        "type": "transcription",
+                        "audio": {
+                            "input": {
+                                "format": {
+                                    "type": "pcm16",
+                                    "sample_rate": 24000,
+                                    "channels": 1,
+                                },
+                                "transcription": {
+                                    "model": self._model,
+                                    "language": self._language,
+                                },
+                            }
                         },
+                        "turn_detection": None,
                     },
                 }))
 
                 self._connected = True
                 self._reconnect_attempts = 0
                 self._receive_task = asyncio.create_task(self._receive_loop())
-                logger.info("Connected to OpenAI Realtime (transcribe, lang=%s)", self._language)
+                logger.info("Connected to OpenAI Realtime Transcription (lang=%s)", self._language)
                 return
 
+            except websockets.InvalidStatus as e:
+                # Permanent error (e.g., invalid API key) — do not retry
+                logger.error("OpenAI permanent error: %s. Not retrying.", e)
+                self._should_reconnect = False
+                return
             except Exception as e:
+                if not self._should_reconnect:
+                    return
                 self._reconnect_attempts += 1
-                delay = min(BASE_RECONNECT_DELAY * (2 ** self._reconnect_attempts), MAX_RECONNECT_DELAY)
+                delay = min(
+                    BASE_RECONNECT_DELAY * (2 ** self._reconnect_attempts),
+                    MAX_RECONNECT_DELAY,
+                )
                 logger.error(
                     "OpenAI connection failed (attempt %d): %s. Retrying in %.1fs",
-                    self._reconnect_attempts,
-                    e,
-                    delay,
+                    self._reconnect_attempts, e, delay,
                 )
                 await asyncio.sleep(delay)
 
     # ──── Audio input ────
 
     async def append_audio(self, pcm: bytes) -> None:
-        """Send an audio buffer chunk to OpenAI."""
+        """Send an audio buffer chunk and commit it for transcription."""
         if not self._ws or not self._connected:
             return
 
         try:
-            # OpenAI Realtime API expects base64-encoded PCM16
-            import base64
-
             encoded = base64.b64encode(pcm).decode("ascii")
             await self._ws.send(json.dumps({
                 "type": "input_audio_buffer.append",
                 "audio": encoded,
+            }))
+            # Commit the buffer so transcription processes it
+            await self._ws.send(json.dumps({
+                "type": "input_audio_buffer.commit",
             }))
         except Exception as e:
             logger.error("Failed to send audio: %s", e)
@@ -138,11 +162,9 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
     # ──── Event receiving ────
 
     async def receive(self) -> TranscriptionResult:
-        """Get the next transcription event from the queue."""
         return await self._event_queue.get()
 
     async def _receive_loop(self) -> None:
-        """Continuously receive and dispatch events from the WebSocket."""
         try:
             async for message in self._ws:
                 try:
@@ -150,17 +172,18 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
                     await self._dispatch_event(event)
                 except json.JSONDecodeError:
                     logger.warning("Invalid JSON from OpenAI: %s", message[:100])
-                except Exception as e:
-                    logger.error("Error dispatching event: %s", e)
         except websockets.ConnectionClosed:
             logger.warning("OpenAI WebSocket closed")
             self._connected = False
+            if self._should_reconnect:
+                asyncio.create_task(self._connect())
         except Exception as e:
             logger.error("Receive loop error: %s", e)
             self._connected = False
+            if self._should_reconnect:
+                asyncio.create_task(self._connect())
 
     async def _dispatch_event(self, event: dict) -> None:
-        """Route incoming events by type."""
         event_type = event.get("type", "")
 
         if event_type == "conversation.item.input_audio_transcription.delta":
@@ -171,11 +194,8 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
             await self._handle_error(event)
         elif event_type == "session.created":
             logger.info("OpenAI session created: %s", event.get("session", {}).get("id"))
-        elif event_type == "session.updated":
-            logger.info("OpenAI session updated")
 
     async def _handle_transcription_delta(self, event: dict) -> None:
-        """Handle a partial transcription delta."""
         item_id = event.get("item_id", "")
         delta = event.get("delta", "")
 
@@ -183,35 +203,25 @@ class OpenAIRealtimeTranscribeProvider(RealtimeTranscriptionProvider):
             self._pending_items[item_id] = ""
         self._pending_items[item_id] += delta
 
-        result = TranscriptionResult(
+        await self._event_queue.put(TranscriptionResult(
             text=self._pending_items[item_id],
             is_final=False,
             item_id=item_id,
             language=self._language,
-        )
-        await self._event_queue.put(result)
+        ))
 
     async def _handle_transcription_completed(self, event: dict) -> None:
-        """Handle a completed transcription."""
         item_id = event.get("item_id", "")
         transcript = event.get("transcript", "")
-
-        # Use the completed transcript, which may differ from accumulated deltas
         self._pending_items.pop(item_id, None)
 
-        result = TranscriptionResult(
+        await self._event_queue.put(TranscriptionResult(
             text=transcript,
             is_final=True,
             item_id=item_id,
             language=self._language,
-        )
-        await self._event_queue.put(result)
+        ))
 
     async def _handle_error(self, event: dict) -> None:
-        """Handle OpenAI errors without crashing the pipeline."""
         error = event.get("error", {})
-        logger.error(
-            "OpenAI error [%s]: %s",
-            error.get("code", "unknown"),
-            error.get("message", "Unknown error"),
-        )
+        logger.error("OpenAI error [%s]: %s", error.get("code", "unknown"), error.get("message", "Unknown error"))

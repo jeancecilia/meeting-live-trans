@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 interface Meeting {
   id: string;
   room_name: string;
   title: string;
   status: string;
-  created_by: string;
   created_at: string;
 }
 
@@ -27,13 +27,8 @@ export default function Dashboard() {
 
   async function fetchMeetings() {
     try {
-      const token = localStorage.getItem("access_token");
-      const res = await fetch("/api/meetings", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setMeetings(await res.json());
-      }
+      const res = await apiFetch("/api/meetings");
+      if (res.ok) setMeetings(await res.json());
     } catch {
       // Not authenticated yet
     }
@@ -42,13 +37,8 @@ export default function Dashboard() {
   async function createMeeting() {
     setError(null);
     try {
-      const token = localStorage.getItem("access_token");
-      const res = await fetch("/api/meetings", {
+      const res = await apiFetch("/api/meetings", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           title,
           guest_spoken_language: guestLanguage,
@@ -61,7 +51,7 @@ export default function Dashboard() {
       setTitle("");
       fetchMeetings();
       router.push(`/meeting/${meeting.id}`);
-    } catch (err) {
+    } catch {
       setError("Failed to create meeting. Please try again.");
     }
   }
@@ -80,18 +70,12 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Create meeting modal */}
         {showCreate && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md space-y-4">
-              <h2 className="text-lg font-semibold text-slate-100">
-                Create Meeting
-              </h2>
-
+              <h2 className="text-lg font-semibold text-slate-100">Create Meeting</h2>
               <div>
-                <label className="block text-sm text-slate-300 mb-1">
-                  Meeting Title
-                </label>
+                <label className="block text-sm text-slate-300 mb-1">Meeting Title</label>
                 <input
                   type="text"
                   value={title}
@@ -101,11 +85,8 @@ export default function Dashboard() {
                   placeholder="Client project consultation"
                 />
               </div>
-
               <div>
-                <label className="block text-sm text-slate-300 mb-1">
-                  Guest Spoken Language
-                </label>
+                <label className="block text-sm text-slate-300 mb-1">Guest Spoken Language</label>
                 <select
                   value={guestLanguage}
                   onChange={(e) => setGuestLanguage(e.target.value)}
@@ -116,11 +97,8 @@ export default function Dashboard() {
                   <option value="th">Thai</option>
                 </select>
               </div>
-
               <div>
-                <label className="block text-sm text-slate-300 mb-1">
-                  Invitation Expires In (hours)
-                </label>
+                <label className="block text-sm text-slate-300 mb-1">Invitation Expires In (hours)</label>
                 <input
                   type="number"
                   value={expiresInHours}
@@ -129,9 +107,7 @@ export default function Dashboard() {
                              text-slate-100 focus:outline-none focus:border-blue-500"
                 />
               </div>
-
               {error && <p className="text-red-400 text-sm">{error}</p>}
-
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setShowCreate(false)}
@@ -153,7 +129,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Meeting list */}
         <div className="space-y-3">
           {meetings.length === 0 && (
             <p className="text-slate-500 text-center py-12">
@@ -170,8 +145,7 @@ export default function Dashboard() {
               <div>
                 <h3 className="text-slate-100 font-medium">{m.title}</h3>
                 <p className="text-slate-400 text-sm">
-                  {m.status} ·{" "}
-                  {new Date(m.created_at).toLocaleDateString()}
+                  {m.status} · {new Date(m.created_at).toLocaleDateString()}
                 </p>
               </div>
               <span

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.security import SecurityHeadersMiddleware
 from app.routers import auth, captions, invites, livekit, meetings, webhooks
 
 app = FastAPI(
@@ -11,15 +12,18 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
+# ── Security middleware ──
+app.add_middleware(SecurityHeadersMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins.split(","),
+    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-# Register routers
+# ── Register routers ──
 app.include_router(auth.router)
 app.include_router(meetings.router)
 app.include_router(invites.router)
@@ -35,20 +39,39 @@ async def health_check():
 
 @app.get("/api/health/database")
 async def health_database():
-    from app.database import check_database_connection
+    from sqlalchemy import text
+    from app.database import engine
 
-    connected = await check_database_connection()
-    return {
-        "status": "ok" if connected else "error",
-        "database": "connected" if connected else "unavailable",
-    }
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        return {"status": "error", "database": str(e)}
 
 
 @app.get("/api/health/redis")
 async def health_redis():
-    return {"status": "ok", "redis": "connected"}
+    import redis.asyncio as redis_asyncio
+
+    try:
+        r = redis_asyncio.from_url(settings.redis_url)
+        await r.ping()
+        await r.close()
+        return {"status": "ok", "redis": "connected"}
+    except Exception as e:
+        return {"status": "error", "redis": str(e)}
 
 
 @app.get("/api/health/livekit")
 async def health_livekit():
-    return {"status": "ok", "livekit": "reachable"}
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"http://{settings.livekit_host}:{settings.livekit_port}/"
+            )
+        return {"status": "ok", "livekit": "reachable" if resp.status_code < 500 else "degraded"}
+    except Exception as e:
+        return {"status": "error", "livekit": str(e)}
