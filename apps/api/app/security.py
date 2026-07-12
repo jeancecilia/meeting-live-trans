@@ -109,16 +109,16 @@ ALLOWED_WS_ORIGINS = {
 
 
 def validate_ws_origin(origin: Optional[str]) -> bool:
-    """Validate WebSocket connection origin to prevent CSWSH."""
+    """Validate WebSocket connection origin using exact matching."""
     if not origin:
         return False
 
-    for allowed in ALLOWED_WS_ORIGINS:
-        if origin.startswith(allowed):
-            return True
+    allowed = origin in ALLOWED_WS_ORIGINS
 
-    logger.warning("Rejected WebSocket from untrusted origin: %s", origin)
-    return False
+    if not allowed:
+        logger.warning("Rejected WebSocket from untrusted origin: %s", origin)
+
+    return allowed
 
 
 # ──── Input sanitization ────

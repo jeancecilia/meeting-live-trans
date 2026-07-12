@@ -16,13 +16,9 @@ from typing import Optional
 from pipeline import (
     ParticipantAudioPipeline,
     PipelineState,
-    ProviderType,
 )
 from openai_transcribe import OpenAIRealtimeTranscribeProvider
-from translators import (
-    OpenAIRealtimeTranslateProvider,
-    OpenAITranscribeThenTranslateProvider,
-)
+from translators import OpenAITranscribeThenTranslateProvider
 
 logger = logging.getLogger("translation-worker.orchestrator")
 
@@ -50,9 +46,7 @@ class RoomOrchestrator:
         self._caption_api_url = caption_api_url
         self._pipelines: dict[str, ParticipantAudioPipeline] = {}
         self._openai_api_key = os.environ.get("OPENAI_API_KEY", "")
-        self._provider_type = ProviderType(
-            os.environ.get("TRANSLATION_PROVIDER", "openai-transcribe-then-translate")
-        )
+        self._provider_type = os.environ.get("TRANSLATION_PROVIDER", "openai-transcribe-then-translate")
         self._max_sessions = int(
             os.environ.get("TRANSLATION_MAX_SESSIONS_PER_ROOM", "5")
         )
@@ -187,7 +181,7 @@ class RoomOrchestrator:
             "meeting_id": self.meeting_id,
             "room_name": self.room_name,
             "active_pipelines": len(self._pipelines),
-            "provider_type": self._provider_type.value,
+            "provider_type": self._provider_type,
             "audio_duration_seconds": round(self._total_audio_duration_seconds, 1),
             "caption_event_count": self._caption_event_count,
         }
