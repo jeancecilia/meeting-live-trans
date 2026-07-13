@@ -27,7 +27,7 @@ class OpenAIRealtimeTranscribeProvider:
     def __init__(
         self,
         api_key: str,
-        model: str = "gpt-realtime-whisper",
+        model: str = "gpt-4o-mini-realtime-preview",
         base_url: str | None = None,
         max_connect_attempts: int = 3,
     ) -> None:
@@ -86,24 +86,16 @@ class OpenAIRealtimeTranscribeProvider:
                         {
                             "type": "session.update",
                             "session": {
-                                "type": "transcription",
-                                "audio": {
-                                    "input": {
-                                        "format": {
-                                            "type": "audio/pcm",
-                                            "rate": 24_000,
-                                        },
-                                        "transcription": {
-                                            "model": self._model,
-                                            "language": self._language,
-                                            "delay": os.environ.get(
-                                                "OPENAI_TRANSCRIPTION_DELAY", "low"
-                                            ),
-                                        },
-                                        "turn_detection": None,
-                                    }
+                                "modalities": ["text", "audio"],
+                                "input_audio_format": "pcm16",
+                                "output_audio_format": "pcm16",
+                                "input_audio_transcription": {
+                                    "model": "whisper-1",
                                 },
-                            },
+                                "turn_detection": {
+                                    "type": "server_vad",
+                                }
+                            }
                         }
                     )
                 )
