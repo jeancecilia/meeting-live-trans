@@ -27,7 +27,7 @@ class OpenAIRealtimeTranscribeProvider:
     def __init__(
         self,
         api_key: str,
-        model: str = "gpt-4o-mini-realtime-preview",
+        model: str = "gpt-realtime-mini",
         base_url: str | None = None,
         max_connect_attempts: int = 3,
     ) -> None:
@@ -73,8 +73,7 @@ class OpenAIRealtimeTranscribeProvider:
                 self._websocket = await websockets.connect(
                     url,
                     additional_headers={
-                        "Authorization": f"Bearer {self._api_key}",
-                        "OpenAI-Beta": "realtime=v1",
+                        "Authorization": f"Bearer {self._api_key}"
                     },
                     ping_interval=20,
                     ping_timeout=10,
@@ -86,14 +85,19 @@ class OpenAIRealtimeTranscribeProvider:
                         {
                             "type": "session.update",
                             "session": {
-                                "modalities": ["text", "audio"],
-                                "input_audio_format": "pcm16",
-                                "output_audio_format": "pcm16",
-                                "input_audio_transcription": {
-                                    "model": "whisper-1",
-                                },
-                                "turn_detection": {
-                                    "type": "server_vad",
+                                "type": "realtime",
+                                "audio": {
+                                    "input": {
+                                        "format": {
+                                            "type": "audio/pcm",
+                                            "rate": 24_000,
+                                        },
+                                        "transcription": {
+                                            "model": "whisper-1",
+                                            "language": self._language,
+                                        },
+                                        "turn_detection": None,
+                                    }
                                 }
                             }
                         }

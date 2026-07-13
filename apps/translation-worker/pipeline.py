@@ -157,7 +157,7 @@ class ParticipantAudioPipeline:
             self._transcription = OpenAIRealtimeTranscribeProvider(
                 api_key=os.environ.get("OPENAI_API_KEY", ""),
                 model=os.environ.get(
-                    "OPENAI_REALTIME_TRANSCRIBE_MODEL", "gpt-4o-mini-realtime-preview"
+                    "OPENAI_REALTIME_TRANSCRIBE_MODEL", "gpt-realtime-mini"
                 ),
             )
         if self._translation is None:
