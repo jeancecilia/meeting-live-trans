@@ -23,7 +23,7 @@ async def list_active_rooms(request: Request) -> list[dict]:
 
     async with async_session() as db:
         result = await db.execute(
-            select(Meeting).where(Meeting.status == "active")
+            select(Meeting).where(Meeting.status.in_(["created", "active"]))
         )
         meetings = result.scalars().all()
 

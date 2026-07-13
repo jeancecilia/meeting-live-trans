@@ -46,6 +46,13 @@ class CaptionEventRequest(BaseModel):
     is_final: bool
     started_at: str | None = None
 
+class SystemEventRequest(BaseModel):
+    type: str
+    meeting_id: str
+    speaker_id: str
+    speaker_name: str
+    message: str
+
 
 @router.websocket("/api/ws/meetings/{meeting_id}/captions")
 async def caption_websocket(websocket: WebSocket, meeting_id: str) -> None:
@@ -165,7 +172,7 @@ async def caption_websocket(websocket: WebSocket, meeting_id: str) -> None:
 
 
 @router.post("/api/internal/meetings/{meeting_id}/caption-events")
-async def ingest_caption_event(meeting_id: str, event: CaptionEventRequest, request: Request) -> dict:
+async def ingest_caption_event(meeting_id: str, event: CaptionEventRequest | SystemEventRequest, request: Request) -> dict:
     """Internal endpoint for the translation worker."""
     auth_header = request.headers.get("Authorization", "")
     if auth_header != f"Bearer {settings.caption_worker_service_token}":
@@ -175,11 +182,11 @@ async def ingest_caption_event(meeting_id: str, event: CaptionEventRequest, requ
 
     routed = 0
     if meeting_id in _subscribers:
-        target = event.target_language
         disconnected = []
+        is_system_error = isinstance(event, SystemEventRequest) and event.type == "system.error"
         for pid, sub in _subscribers[meeting_id].items():
-            if sub["lang"] != target:
-                continue
+            # if not is_system_error and sub["lang"] != getattr(event, "target_language", None):
+            #     continue
             try:
                 await sub["ws"].send_json(event.model_dump())
                 routed += 1
@@ -189,3 +196,34 @@ async def ingest_caption_event(meeting_id: str, event: CaptionEventRequest, requ
             _subscribers[meeting_id].pop(pid, None)
 
     return {"status": "ok", "routed_to": routed}
+
+async def broadcast_global_system_event(message: str) -> int:
+    event = SystemEventRequest(
+        type="system.error",
+        meeting_id="global",
+        speaker_id="system",
+        speaker_name="System Alert",
+        message=message
+    )
+    payload = event.model_dump()
+    routed = 0
+    for mid, subs in _subscribers.items():
+        disconnected = []
+        for pid, sub in subs.items():
+            try:
+                await sub["ws"].send_json(payload)
+                routed += 1
+            except Exception:
+                disconnected.append(pid)
+        for pid in disconnected:
+            subs.pop(pid, None)
+    return routed
+
+@router.post("/api/internal/system-events")
+async def ingest_system_event(event: SystemEventRequest, request: Request) -> dict:
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header != f"Bearer {settings.caption_worker_service_token}":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid service token")
+    
+    routed = await broadcast_global_system_event(event.message)
+    return {"status": "ok", "routed": routed}

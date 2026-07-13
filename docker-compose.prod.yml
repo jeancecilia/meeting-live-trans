@@ -1,0 +1,97 @@
+services:
+  meeting_postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-meeting_trans}
+      POSTGRES_USER: ${POSTGRES_USER:-meeting_trans}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-meeting_trans}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-meeting_trans}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lawyer-crm_default
+
+  meeting_redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lawyer-crm_default
+
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.api
+    environment:
+      - APP_ENV=production
+      - POSTGRES_HOST=meeting_postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-meeting_trans}
+      - POSTGRES_USER=${POSTGRES_USER:-meeting_trans}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-meeting_trans}
+      - REDIS_URL=redis://meeting_redis:6379/0
+      - LIVEKIT_HOST=meet-npvekn8u.livekit.cloud
+      - LIVEKIT_PORT=443
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - LIVEKIT_WS_URL=wss://meet-npvekn8u.livekit.cloud
+      - LIVEKIT_PUBLIC_WS_URL=wss://meet-npvekn8u.livekit.cloud
+      - CAPTION_WORKER_SERVICE_TOKEN=${CAPTION_WORKER_SERVICE_TOKEN:-change-me-worker-service-token}
+      - CORS_ORIGINS=https://meet.109.123.230.159.nip.io
+      - SEED_ENGLISH_PASSWORD=${SEED_ENGLISH_PASSWORD}
+      - SEED_THAI_PASSWORD=${SEED_THAI_PASSWORD}
+    depends_on:
+      meeting_postgres:
+        condition: service_healthy
+      meeting_redis:
+        condition: service_healthy
+    networks:
+      - lawyer-crm_default
+
+  worker:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    environment:
+      - APP_ENV=production
+      - REDIS_URL=redis://meeting_redis:6379/0
+      - LIVEKIT_URL=wss://meet-npvekn8u.livekit.cloud
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - API_URL=http://meeting-live-trans-api-1:8000
+      - CAPTION_API_URL=http://meeting-live-trans-api-1:8000
+      - CAPTION_WORKER_SERVICE_TOKEN=${CAPTION_WORKER_SERVICE_TOKEN:-change-me-worker-service-token}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-change-me}
+    depends_on:
+      meeting_redis:
+        condition: service_healthy
+    networks:
+      - lawyer-crm_default
+
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.web
+      args:
+        - NEXT_PUBLIC_API_URL=https://api.meet.109.123.230.159.nip.io
+        - NEXT_PUBLIC_LIVEKIT_WS_URL=wss://meet-npvekn8u.livekit.cloud
+    environment:
+      - NEXT_PUBLIC_LIVEKIT_WS_URL=wss://meet-npvekn8u.livekit.cloud
+      - NEXT_PUBLIC_API_URL=https://api.meet.109.123.230.159.nip.io
+    networks:
+      - lawyer-crm_default
+
+volumes:
+  postgres_data:
+
+networks:
+  lawyer-crm_default:
+    external: true
+

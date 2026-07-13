@@ -102,18 +102,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 # ──── WebSocket origin validation ────
 
-ALLOWED_WS_ORIGINS = {
-    "http://localhost:3000",
-    "https://meet.example.com",
-}
-
+from app.config import settings
 
 def validate_ws_origin(origin: Optional[str]) -> bool:
-    """Validate WebSocket connection origin using exact matching."""
+    """Validate WebSocket connection origin against CORS origins."""
     if not origin:
         return False
-
-    allowed = origin in ALLOWED_WS_ORIGINS
+        
+    allowed_origins = [o.strip() for o in settings.cors_origins.split(",")]
+    allowed = origin in allowed_origins
 
     if not allowed:
         logger.warning("Rejected WebSocket from untrusted origin: %s", origin)

@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir .
 
 COPY apps/translation-worker/ .
 
-CMD ["python", "main.py"]
+CMD ["python", "main.py", "start"]

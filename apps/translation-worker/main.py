@@ -1,130 +1,43 @@
-"""
-Translation worker — polls API for active rooms, joins LiveKit hidden,
-subscribes to mic tracks, processes audio through OpenAI pipeline.
-Sole owner of caption delivery: drain queue after each frame and on shutdown.
-"""
-
 import asyncio
 import logging
 import os
-
 import httpx
+import json
+
+from livekit.agents import (
+    AutoSubscribe,
+    JobContext,
+    WorkerOptions,
+    WorkerType,
+    cli,
+    llm,
+)
+from livekit.plugins import openai
+from livekit import rtc
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("translation-worker")
 
-LIVEKIT_WS_URL = os.environ.get("LIVEKIT_WS_URL", "ws://localhost:7880")
-LIVEKIT_API_KEY = os.environ.get("LIVEKIT_API_KEY", "devkey")
-LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "secret")
 CAPTION_API_URL = os.environ.get("CAPTION_API_URL", "http://api:8000")
 WORKER_SERVICE_TOKEN = os.environ.get("CAPTION_WORKER_SERVICE_TOKEN", "change-me")
 API_URL = os.environ.get("API_URL", "http://api:8000")
-POLL_INTERVAL = int(os.environ.get("WORKER_POLL_INTERVAL", "5"))
 
-_active: dict[str, asyncio.Task] = {}
-
-
-async def dispatch_rooms() -> None:
-    while True:
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as c:
-                resp = await c.get(
-                    f"{API_URL}/api/internal/active-rooms",
-                    headers={"Authorization": f"Bearer {WORKER_SERVICE_TOKEN}"},
-                )
-                if resp.status_code == 200:
-                    for r in resp.json():
-                        rn = r["room_name"]
-                        if rn not in _active:
-                            logger.info("Dispatching worker: room=%s meeting=%s", rn, r["id"])
-                            _active[rn] = asyncio.create_task(handle_room(r["id"], rn))
-                done = [n for n, t in _active.items() if t.done()]
-                for n in done:
-                    del _active[n]
-        except Exception as e:
-            logger.error("Dispatch error: %s", e)
-        await asyncio.sleep(POLL_INTERVAL)
-
-
-def _parse_meta(s: str) -> dict:
-    if not s:
-        return {}
-    d = {}
-    for p in s.split(";"):
-        p = p.strip()
-        if ":" in p:
-            k, v = p.split(":", 1)
-            d[k.strip()] = v.strip()
-    return d
-
-
-async def handle_room(meeting_id: str, room_name: str) -> None:
-    from livekit import api, rtc
-
-    identity = f"worker_{room_name}"
-    token = (
-        api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
-        .with_identity(identity)
-        .with_name("Translation Worker")
-        .with_grants(api.VideoGrants(room_join=True, room=room_name, can_publish=False, can_subscribe=True, hidden=True))
-        .to_jwt()
-    )
-
-    room = rtc.Room()
-
-    @room.on("track_subscribed")
-    def on_track(track: rtc.Track, pub: rtc.RemoteTrackPublication, participant: rtc.RemoteParticipant):
-        if track.kind != rtc.TrackKind.KIND_AUDIO:
-            return
-        logger.info("Audio track: %s/%s sid=%s", participant.name, participant.identity, track.sid)
-        meta = _parse_meta(participant.metadata)
-        sl = meta.get("spoken_language", "en")
-        cl = "th" if sl == "en" else "en"
-        stream = rtc.AudioStream(track, sample_rate=24000, num_channels=1)
-        asyncio.create_task(process_audio(meeting_id, participant.identity, participant.name or participant.identity, sl, cl, stream))
-
-    @room.on("participant_disconnected")
-    def on_disconnect(participant: rtc.RemoteParticipant):
-        logger.info("Participant left: %s", participant.identity)
-
+async def get_meeting_id(room_name: str) -> str | None:
     try:
-        await room.connect(LIVEKIT_WS_URL, token)
-        logger.info("Worker joined room: %s", room_name)
-        while room.connection_state != rtc.ConnectionState.CONN_DISCONNECTED:
-            await asyncio.sleep(1)
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            resp = await c.get(
+                f"{API_URL}/api/internal/active-rooms",
+                headers={"Authorization": f"Bearer {WORKER_SERVICE_TOKEN}"},
+            )
+            if resp.status_code == 200:
+                for r in resp.json():
+                    if r["room_name"] == room_name:
+                        return r["id"]
     except Exception as e:
-        logger.error("Room error %s: %s", room_name, e)
-    finally:
-        await room.disconnect()
+        logger.error(f"Failed to fetch active rooms: {e}")
+    return None
 
-
-async def process_audio(
-    meeting_id: str, pid: str, pname: str,
-    spoken_lang: str, caption_lang: str,
-    audio_stream: "rtc.AudioStream",
-) -> None:
-    from pipeline import ParticipantAudioPipeline
-
-    pipeline = ParticipantAudioPipeline(participant_id=pid, participant_name=pname, spoken_language=spoken_lang, caption_language=caption_lang)
-    await pipeline.start()
-
-    try:
-        async for event in audio_stream:
-            frame = event.frame
-            await pipeline.process_audio_frame(frame.data.tobytes(), frame.sample_rate, frame.num_channels)
-
-            for ev in pipeline.drain_captions():
-                await _send_caption(meeting_id, ev)
-    except Exception as e:
-        logger.error("Audio error %s: %s", pname, e)
-    finally:
-        # finish() commits pending audio, waits for final transcript, returns remaining
-        remaining = await pipeline.finish()
-        for ev in remaining:
-            await _send_caption(meeting_id, ev)
-
-
-async def _send_caption(meeting_id: str, event: dict) -> None:
+async def send_caption(meeting_id: str, event: dict) -> None:
     event["meeting_id"] = meeting_id
     try:
         async with httpx.AsyncClient(timeout=5.0) as c:
@@ -136,11 +49,111 @@ async def _send_caption(meeting_id: str, event: dict) -> None:
     except Exception as e:
         logger.error("Failed to send caption: %s", e)
 
+def get_language_from_participant(participant: rtc.RemoteParticipant) -> tuple[str, str]:
+    """Parse participant metadata to determine their spoken and caption languages."""
+    meta = participant.metadata
+    spoken = "en"
+    caption = "th"
+    if meta:
+        try:
+            m = json.loads(meta)
+            spoken = m.get("spoken_language", "en")
+            # For simplicity, if they speak English, translate to Thai. If Thai, translate to English.
+            caption = "th" if spoken == "en" else "en"
+        except Exception:
+            pass
+    return spoken, caption
 
-async def main() -> None:
-    logger.info("Worker starting: LiveKit=%s API=%s", LIVEKIT_WS_URL, API_URL)
-    await dispatch_rooms()
+async def handle_participant_track(meeting_id: str, participant: rtc.RemoteParticipant, track: rtc.RemoteAudioTrack):
+    logger.info(f"Setting up translation for {participant.identity}")
+    
+    spoken_lang, target_lang = get_language_from_participant(participant)
+    
+    instructions = (
+        f"You are a highly skilled, lightning-fast translator. "
+        f"You will receive audio of someone speaking {spoken_lang}. "
+        f"Translate it directly into {target_lang}. "
+        f"Output ONLY the translated text. Do not output conversational filler. "
+        f"Do not output audio."
+    )
+    
+    model = openai.realtime.RealtimeModel(
+        model="gpt-realtime-mini",
+        instructions=instructions,
+        modalities=["text", "audio"],
+    )
+    session = model.session()
 
+
+    audio_stream = rtc.AudioStream(track)
+
+    seq = [0]
+    current_text = [""]
+
+    @session.on("response_text_delta")
+    def on_text_delta(event):
+        current_text[0] += event.delta
+        asyncio.create_task(send_caption(meeting_id, {
+            "type": "caption.delta",
+            "speaker_id": participant.identity,
+            "speaker_name": participant.name or participant.identity,
+            "source_language": spoken_lang,
+            "target_language": target_lang,
+            "translated_text": current_text[0],
+            "sequence": seq[0],
+            "revision": 0,
+            "is_final": False,
+        }))
+
+    @session.on("response_text_done")
+    def on_text_done(event):
+        asyncio.create_task(send_caption(meeting_id, {
+            "type": "caption.final",
+            "speaker_id": participant.identity,
+            "speaker_name": participant.name or participant.identity,
+            "source_language": spoken_lang,
+            "target_language": target_lang,
+            "translated_text": current_text[0],
+            "sequence": seq[0],
+            "revision": 1,
+            "is_final": True,
+        }))
+        seq[0] += 1
+        current_text[0] = ""
+
+    @session.on("error")
+    def on_error(event):
+        logger.error(f"Realtime API error for {participant.identity}: {event}")
+
+    async def pump_audio():
+        try:
+            async for event in audio_stream:
+                session.push_audio(event.frame)
+        except Exception as e:
+            logger.error(f"Error processing audio for {participant.identity}: {e}")
+
+    asyncio.create_task(pump_audio())
+
+async def entrypoint(ctx: JobContext):
+    logger.info(f"Starting agent for room {ctx.room.name}")
+    meeting_id = await get_meeting_id(ctx.room.name)
+    
+    if not meeting_id:
+        logger.error(f"Meeting ID not found for room {ctx.room.name}")
+        return
+
+    # Automatically subscribe to all audio tracks
+    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+
+    @ctx.room.on("track_subscribed")
+    def on_track_subscribed(track: rtc.Track, publication: rtc.TrackPublication, participant: rtc.RemoteParticipant):
+        if track.kind == rtc.TrackKind.KIND_AUDIO:
+            asyncio.create_task(handle_participant_track(meeting_id, participant, track))
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    cli.run_app(
+        WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            worker_type=WorkerType.ROOM,
+        )
+    )
