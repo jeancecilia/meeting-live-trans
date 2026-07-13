@@ -11,8 +11,52 @@ Covers:
 """
 
 import hashlib
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+
+from app.main import _AccessTokenRedactionFilter
+
+
+def test_websocket_access_token_is_redacted_from_access_logs() -> None:
+    record = logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg='%s - "%s %s HTTP/%s" %d',
+        args=(
+            "127.0.0.1:1234",
+            "WebSocket",
+            "/api/ws/meetings/test/captions?token=secret-jwt&trace=1",
+            "1.1",
+            101,
+        ),
+        exc_info=None,
+    )
+
+    assert _AccessTokenRedactionFilter().filter(record)
+    assert "secret-jwt" not in str(record.args)
+    assert "token=<redacted>&trace=1" in str(record.args)
+
+
+def test_websocket_protocol_log_shape_is_also_redacted() -> None:
+    record = logging.LogRecord(
+        name="uvicorn.error",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg='%s - "WebSocket %s" [accepted]',
+        args=(
+            "127.0.0.1:1234",
+            "/api/ws/meetings/test/captions?token=secret-jwt",
+        ),
+        exc_info=None,
+    )
+
+    assert _AccessTokenRedactionFilter().filter(record)
+    assert "secret-jwt" not in str(record.args)
+    assert "token=<redacted>" in str(record.args)
 
 
 

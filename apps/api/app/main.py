@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import re
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +8,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routers import active_rooms, auth, captions, invites, livekit, meetings, webhooks
 from app.routers.captions import broadcast_global_system_event
+
+
+class _AccessTokenRedactionFilter(logging.Filter):
+    """Keep WebSocket access tokens out of Uvicorn access-log paths."""
+
+    _token_query = re.compile(r"([?&]token=)[^&\s]+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = self._token_query.sub(r"\1<redacted>", record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                self._token_query.sub(r"\1<redacted>", value)
+                if isinstance(value, str)
+                else value
+                for value in record.args
+            )
+        return True
+
+
+for _logger_name in ("uvicorn.access", "uvicorn.error"):
+    logging.getLogger(_logger_name).addFilter(_AccessTokenRedactionFilter())
 
 async def health_monitor_task():
     while True:

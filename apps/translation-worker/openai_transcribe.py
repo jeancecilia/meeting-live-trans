@@ -27,7 +27,7 @@ class OpenAIRealtimeTranscribeProvider:
     def __init__(
         self,
         api_key: str,
-        model: str = "gpt-realtime-mini",
+        model: str = "gpt-realtime-whisper",
         base_url: str | None = None,
         max_connect_attempts: int = 3,
     ) -> None:
@@ -53,6 +53,20 @@ class OpenAIRealtimeTranscribeProvider:
         self._silence_commit_ms = int(
             os.environ.get("OPENAI_TRANSCRIPTION_SILENCE_COMMIT_MS", "500")
         )
+        self._transcription_delay = os.environ.get(
+            "OPENAI_TRANSCRIPTION_DELAY", "low"
+        ).lower()
+        if self._transcription_delay not in {
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+        }:
+            raise ValueError(
+                "OPENAI_TRANSCRIPTION_DELAY must be one of minimal, low, "
+                "medium, high, or xhigh"
+            )
 
     async def start(self, language: str) -> None:
         if not self._api_key or self._api_key == "sk-change-me":
@@ -65,7 +79,8 @@ class OpenAIRealtimeTranscribeProvider:
         await self._connect()
 
     async def _connect(self) -> None:
-        url = f"{self._base_url}?model={self._model}"
+        separator = "&" if "?" in self._base_url else "?"
+        url = f"{self._base_url}{separator}intent=transcription"
         last_error: Exception | None = None
 
         for attempt in range(1, self._max_connect_attempts + 1):
@@ -85,7 +100,7 @@ class OpenAIRealtimeTranscribeProvider:
                         {
                             "type": "session.update",
                             "session": {
-                                "type": "realtime",
+                                "type": "transcription",
                                 "audio": {
                                     "input": {
                                         "format": {
@@ -93,10 +108,10 @@ class OpenAIRealtimeTranscribeProvider:
                                             "rate": 24_000,
                                         },
                                         "transcription": {
-                                            "model": "whisper-1",
+                                            "model": self._model,
                                             "language": self._language,
+                                            "delay": self._transcription_delay,
                                         },
-                                        "turn_detection": None,
                                     }
                                 }
                             }
@@ -260,10 +275,16 @@ class OpenAIRealtimeTranscribeProvider:
         elif event_type == "conversation.item.input_audio_transcription.failed":
             self._partials.pop(item_id, None)
             logger.error("OpenAI transcription failed for one speech turn")
+            await self._results.put(
+                RuntimeError("OpenAI transcription failed for one speech turn")
+            )
         elif event_type == "error":
             error = event.get("error")
             code = error.get("code", "unknown") if isinstance(error, dict) else "unknown"
             logger.error("OpenAI Realtime error: code=%s", code)
+            await self._results.put(
+                RuntimeError(f"OpenAI Realtime request failed: {code}")
+            )
 
     async def stop(self) -> None:
         self._stopping = True

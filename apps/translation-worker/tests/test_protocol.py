@@ -1,12 +1,81 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from main import parse_participant_metadata
 from openai_transcribe import OpenAIRealtimeTranscribeProvider
+
+
+@pytest.mark.asyncio
+async def test_realtime_session_uses_ga_transcription_contract() -> None:
+    class FakeWebSocket:
+        def __init__(self) -> None:
+            self.sent: list[dict[str, object]] = []
+
+        async def send(self, payload: str) -> None:
+            self.sent.append(json.loads(payload))
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            await asyncio.Future()
+
+        async def close(self) -> None:
+            return None
+
+    websocket = FakeWebSocket()
+    provider = OpenAIRealtimeTranscribeProvider(api_key="test-key")
+    connect = AsyncMock(return_value=websocket)
+
+    with patch(
+        "openai_transcribe.websockets.connect",
+        new=connect,
+    ):
+        await provider.start("th")
+
+    assert connect.await_args.args[0] == (
+        "wss://api.openai.com/v1/realtime?intent=transcription"
+    )
+    assert websocket.sent == [
+        {
+            "type": "session.update",
+            "session": {
+                "type": "transcription",
+                "audio": {
+                    "input": {
+                        "format": {"type": "audio/pcm", "rate": 24_000},
+                        "transcription": {
+                            "model": "gpt-realtime-whisper",
+                            "language": "th",
+                            "delay": "low",
+                        },
+                    }
+                },
+            },
+        }
+    ]
+    await provider.stop()
+
+
+@pytest.mark.asyncio
+async def test_realtime_api_errors_reach_the_pipeline_consumer() -> None:
+    provider = OpenAIRealtimeTranscribeProvider(api_key="test-key")
+
+    await provider._dispatch(
+        {
+            "type": "error",
+            "error": {"code": "invalid_session_configuration"},
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="invalid_session_configuration"):
+        await provider.receive()
 
 
 def test_json_participant_metadata() -> None:
