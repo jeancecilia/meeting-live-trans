@@ -1,5 +1,6 @@
 """LiveKit token routes — uses preferred_caption_language from user profile."""
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
@@ -61,7 +62,9 @@ def _create_livekit_token(identity: str, display_name: str, room_name: str, meta
     t = api.AccessToken(settings.livekit_api_key, settings.livekit_api_secret)
     t.with_identity(identity).with_name(display_name)
     t.with_grants(api.VideoGrants(room_join=True, room=room_name, can_publish=True, can_subscribe=True))
-    t.with_metadata("; ".join(f"{k}:{v}" for k, v in metadata.items() if v))
+    # LiveKit metadata is an opaque string. JSON keeps the contract explicit and
+    # avoids ambiguous parsing when values contain punctuation.
+    t.with_metadata(json.dumps(metadata, separators=(",", ":")))
     t.with_ttl(timedelta(minutes=30))
     return t.to_jwt()
 

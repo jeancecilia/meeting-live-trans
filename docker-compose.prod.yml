@@ -65,13 +65,15 @@ services:
       - LIVEKIT_URL=wss://meet-npvekn8u.livekit.cloud
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
-      - API_URL=http://meeting-live-trans-api-1:8000
-      - CAPTION_API_URL=http://meeting-live-trans-api-1:8000
+      - API_URL=http://api:8000
+      - CAPTION_API_URL=http://api:8000
       - CAPTION_WORKER_SERVICE_TOKEN=${CAPTION_WORKER_SERVICE_TOKEN:-change-me-worker-service-token}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-change-me}
     depends_on:
       meeting_redis:
         condition: service_healthy
+      api:
+        condition: service_started
     networks:
       - lawyer-crm_default
 
@@ -94,4 +96,3 @@ volumes:
 networks:
   lawyer-crm_default:
     external: true
-

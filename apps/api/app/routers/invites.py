@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_current_user, require_internal_role
+from app.auth.dependencies import require_internal_role
 from app.database import get_db
 from app.models.meeting import Meeting
 from app.models.meeting_invite import MeetingInvite

@@ -79,7 +79,7 @@ services:
     environment:
       - APP_ENV=development
       - REDIS_URL=redis://redis:6379/0
-      - LIVEKIT_WS_URL=ws://livekit:7880
+      - LIVEKIT_URL=ws://livekit:7880
       - LIVEKIT_API_KEY=devkey
       - LIVEKIT_API_SECRET=devsecret-at-least-32-characters-long-minimum
       - API_URL=http://api:8000
@@ -89,6 +89,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      api:
+        condition: service_started
 
   web:
     build:

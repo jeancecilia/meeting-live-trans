@@ -9,9 +9,7 @@ Covers:
 - Guest receives no caption events
 """
 
-import uuid
 
-import pytest
 
 
 class TestCaptionEventProtocol:

@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.security import SecurityHeadersMiddleware
 from app.routers import active_rooms, auth, captions, invites, livekit, meetings, webhooks
 from app.routers.captions import broadcast_global_system_event
 
@@ -21,7 +20,7 @@ async def health_monitor_task():
                 
             lk_res = await health_livekit()
             if lk_res["status"] == "error" or lk_res.get("livekit") == "degraded":
-                await broadcast_global_system_event(f"Infrastructure Error: LiveKit unreachable or degraded")
+                await broadcast_global_system_event("Infrastructure Error: LiveKit unreachable or degraded")
                 
         except Exception:
             pass

@@ -14,7 +14,6 @@ import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 
 class TestInviteTokenSecurity:

@@ -20,7 +20,6 @@ import sys
 # Add translation-worker to path for cross-package imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "translation-worker"))
 
-import pytest
 
 
 class TestTranslationFailureRecovery:

@@ -14,7 +14,6 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisco
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import async_session
@@ -28,8 +27,6 @@ logger = logging.getLogger("api.captions")
 router = APIRouter(tags=["captions"])
 
 _subscribers: dict[str, dict[str, dict[str, Any]]] = {}
-
-ALLOWED_WS_ORIGINS = {"http://localhost:3000", "https://meet.example.com"}
 
 
 class CaptionEventRequest(BaseModel):
@@ -45,6 +42,7 @@ class CaptionEventRequest(BaseModel):
     revision: int
     is_final: bool
     started_at: str | None = None
+
 
 class SystemEventRequest(BaseModel):
     type: str
@@ -133,7 +131,11 @@ async def caption_websocket(websocket: WebSocket, meeting_id: str) -> None:
             if not meeting:
                 await websocket.close(code=4003, reason="Meeting not found")
                 return
-            if meeting.status not in ("active",):
+            # A newly created meeting may not have received the LiveKit
+            # participant_joined webhook yet. Membership and caption_access
+            # have already been verified above, so captions can connect while
+            # the room transitions from created to active.
+            if meeting.status not in ("created", "active"):
                 await websocket.close(code=4003, reason="Meeting not active")
                 return
 
@@ -183,10 +185,12 @@ async def ingest_caption_event(meeting_id: str, event: CaptionEventRequest | Sys
     routed = 0
     if meeting_id in _subscribers:
         disconnected = []
-        is_system_error = isinstance(event, SystemEventRequest) and event.type == "system.error"
         for pid, sub in _subscribers[meeting_id].items():
-            # if not is_system_error and sub["lang"] != getattr(event, "target_language", None):
-            #     continue
+            if (
+                isinstance(event, CaptionEventRequest)
+                and sub["lang"] != event.target_language
+            ):
+                continue
             try:
                 await sub["ws"].send_json(event.model_dump())
                 routed += 1

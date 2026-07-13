@@ -11,8 +11,6 @@ Covers:
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
 
 from app.auth.security import (
     create_access_token,
@@ -21,7 +19,7 @@ from app.auth.security import (
     hash_password,
     verify_password,
 )
-from app.auth.dependencies import get_current_user, require_internal_role
+from app.auth.dependencies import require_internal_role
 
 
 class TestPasswordHashing:
@@ -69,7 +67,6 @@ class TestJWT:
         import uuid
 
         # Force token to be expired by setting expiry to 0
-        from app.auth import security
         from app.config import settings as app_settings
 
         monkeypatch.setattr(app_settings, "jwt_access_token_expire_minutes", -1)

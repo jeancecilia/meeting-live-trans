@@ -6,13 +6,9 @@ Tests use the TestClient with mocked dependencies.
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
-from app.auth.security import create_access_token, hash_password
-from app.models.user import User
 
 
 class TestAuthEndpoints:
@@ -139,7 +135,6 @@ class TestWebhookSignature:
         """An incorrect HMAC must be rejected."""
         import hashlib
         import hmac
-        import base64
 
         secret = b"test-secret"
         body = b'{"event":"test"}'

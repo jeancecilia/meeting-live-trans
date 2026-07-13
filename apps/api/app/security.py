@@ -17,6 +17,8 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.config import settings
+
 logger = logging.getLogger("api.security")
 
 
@@ -101,8 +103,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 # ──── WebSocket origin validation ────
-
-from app.config import settings
 
 def validate_ws_origin(origin: Optional[str]) -> bool:
     """Validate WebSocket connection origin against CORS origins."""

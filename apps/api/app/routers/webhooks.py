@@ -1,6 +1,5 @@
 """LiveKit webhook processing with mandatory signature verification."""
 
-import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 

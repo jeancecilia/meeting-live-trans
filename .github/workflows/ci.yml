@@ -73,7 +73,7 @@ jobs:
           cd apps/translation-worker
           pip install -e .
           pip install pytest pytest-asyncio
-          python -m pytest ../api/tests/ -v -k "reliability or security or captions" --ignore-glob="*integration*"
+          python -m pytest tests/ -v
 
   build-containers:
     needs: lint-and-test

@@ -18,11 +18,9 @@ Usage:
 """
 
 import csv
-import json
 import os
 import time
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 EVAL_DATA_DIR = os.path.join(os.path.dirname(__file__), "eval_data")
 

@@ -8,9 +8,7 @@ Privacy and consent middleware (MTG-040).
 """
 
 import logging
-from typing import Optional
 
-from app.config import settings
 
 logger = logging.getLogger("api.privacy")
 
