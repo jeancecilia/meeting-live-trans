@@ -52,6 +52,18 @@ class SystemEventRequest(BaseModel):
     message: str
 
 
+def should_route_caption(
+    subscriber_id: str,
+    subscriber_language: str,
+    event: CaptionEventRequest,
+) -> bool:
+    """Route the normal language feed plus an internal user's own translation."""
+    return (
+        subscriber_language == event.target_language
+        or subscriber_id == event.speaker_id
+    )
+
+
 @router.websocket("/api/ws/meetings/{meeting_id}/captions")
 async def caption_websocket(websocket: WebSocket, meeting_id: str) -> None:
     """
@@ -188,7 +200,7 @@ async def ingest_caption_event(meeting_id: str, event: CaptionEventRequest | Sys
         for pid, sub in _subscribers[meeting_id].items():
             if (
                 isinstance(event, CaptionEventRequest)
-                and sub["lang"] != event.target_language
+                and not should_route_caption(pid, sub["lang"], event)
             ):
                 continue
             try:

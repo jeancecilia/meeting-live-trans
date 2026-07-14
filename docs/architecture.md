@@ -16,7 +16,7 @@ The Meeting Live Trans platform enables browser-based video meetings with realti
    the provider abstraction until English ↔ Thai quality and availability are
    benchmarked.
 
-3. **Private caption routing.** Captions are delivered through authenticated WebSocket connections. The backend enforces authorization server-side. Guests cannot access captions even by modifying frontend JavaScript.
+3. **Private caption routing.** Captions are delivered through authenticated WebSocket connections. The backend enforces authorization server-side. Guests cannot access captions even by modifying frontend JavaScript. Internal users receive their configured caption language and a private preview of translations generated from their own microphone, so one-device translation testing does not require a second internal account.
 
 ## Component diagram
 

@@ -1,5 +1,4 @@
-"""
-Caption routing tests (MTG-050, MTG-053).
+"""Caption routing tests (MTG-050, MTG-053).
 
 Covers:
 - Caption events include speaker identity
@@ -9,6 +8,34 @@ Covers:
 - Guest receives no caption events
 """
 
+import pytest
+from starlette.requests import Request
+
+from app.config import settings
+from app.routers.captions import (
+    CaptionEventRequest,
+    _subscribers,
+    ingest_caption_event,
+    should_route_caption,
+)
+
+
+def caption_event(
+    *, speaker_id: str = "english_internal", target_language: str = "th"
+) -> CaptionEventRequest:
+    return CaptionEventRequest(
+        type="caption.final",
+        event_id="evt_test",
+        meeting_id="meeting_test",
+        speaker_id=speaker_id,
+        speaker_name="English Speaker",
+        source_language="en" if target_language == "th" else "th",
+        target_language=target_language,
+        translated_text="test translation",
+        sequence=1,
+        revision=1,
+        is_final=True,
+    )
 
 
 
@@ -108,3 +135,64 @@ class TestCaptionRouting:
         """Guests must never receive caption events, regardless of request."""
         guest_permissions = {"role": "guest", "caption_access": False}
         assert not guest_permissions["caption_access"]
+
+    def test_normal_caption_language_still_routes(self):
+        event = caption_event(speaker_id="someone_else", target_language="en")
+
+        assert should_route_caption("english_internal", "en", event)
+
+    def test_internal_speaker_receives_own_translation_preview(self):
+        event = caption_event(
+            speaker_id="english_internal", target_language="th"
+        )
+
+        assert should_route_caption("english_internal", "en", event)
+
+    def test_other_language_translation_is_not_leaked_to_unrelated_user(self):
+        event = caption_event(speaker_id="another_speaker", target_language="th")
+
+        assert not should_route_caption("english_internal", "en", event)
+
+    @pytest.mark.asyncio
+    async def test_ingest_delivers_self_translation_to_english_account(self):
+        class FakeWebSocket:
+            def __init__(self) -> None:
+                self.events: list[dict[str, object]] = []
+
+            async def send_json(self, payload: dict[str, object]) -> None:
+                self.events.append(payload)
+
+        meeting_id = "meeting_self_preview"
+        websocket = FakeWebSocket()
+        _subscribers[meeting_id] = {
+            "english_internal": {"ws": websocket, "lang": "en"}
+        }
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/",
+                "headers": [
+                    (
+                        b"authorization",
+                        f"Bearer {settings.caption_worker_service_token}".encode(),
+                    )
+                ],
+            }
+        )
+        event = caption_event(
+            speaker_id="english_internal", target_language="th"
+        ).model_copy(update={"meeting_id": meeting_id})
+
+        try:
+            result = await ingest_caption_event(
+                meeting_id,
+                event,
+                request,
+            )
+        finally:
+            _subscribers.pop(meeting_id, None)
+
+        assert result["routed_to"] == 1
+        assert len(websocket.events) == 1
+        assert websocket.events[0]["target_language"] == "th"
