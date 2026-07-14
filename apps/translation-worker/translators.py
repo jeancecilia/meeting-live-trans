@@ -27,8 +27,26 @@ class OpenAITextTranslationProvider:
             or os.environ.get("OPENAI_API_BASE_URL")
             or "https://api.openai.com/v1"
         ).rstrip("/")
+        self._client = httpx.AsyncClient(timeout=30.0)
+
+    async def translate_partial(
+        self,
+        text: str,
+        source_language: str,
+        target_language: str,
+        revision: int,
+    ) -> TranslationResult:
+        return await self._translate(text, source_language, target_language)
 
     async def translate_final(
+        self,
+        text: str,
+        source_language: str,
+        target_language: str,
+    ) -> TranslationResult:
+        return await self._translate(text, source_language, target_language)
+
+    async def _translate(
         self,
         text: str,
         source_language: str,
@@ -46,32 +64,32 @@ class OpenAITextTranslationProvider:
         source_name = LANGUAGE_NAMES.get(source_language, source_language)
         target_name = LANGUAGE_NAMES.get(target_language, target_language)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                f"{self._base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self._model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": (
-                                f"Translate spoken {source_name} into natural {target_name}. "
-                                "Preserve names, numbers, dates, email addresses, URLs, "
-                                "currencies, and technical terminology accurately. "
-                                "Return only the translation, without explanations."
-                            ),
-                        },
-                        {"role": "user", "content": text},
-                    ],
-                    "temperature": 0.1,
-                },
-            )
-            response.raise_for_status()
-            payload = response.json()
+        response = await self._client.post(
+            f"{self._base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self._model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            f"Translate spoken {source_name} into natural {target_name}. "
+                            "The input may be an incomplete live-speech fragment. "
+                            "Preserve names, numbers, dates, email addresses, URLs, "
+                            "currencies, and technical terminology accurately. "
+                            "Return only the translation, without explanations."
+                        ),
+                    },
+                    {"role": "user", "content": text},
+                ],
+                "temperature": 0.1,
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
 
         translated_text = payload["choices"][0]["message"]["content"].strip()
         return TranslationResult(
@@ -79,3 +97,6 @@ class OpenAITextTranslationProvider:
             source_language=source_language,
             target_language=target_language,
         )
+
+    async def close(self) -> None:
+        await self._client.aclose()

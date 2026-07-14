@@ -8,13 +8,16 @@ The Meeting Live Trans platform enables browser-based video meetings with realti
 
 1. **Separate audio tracks per participant.** Each microphone track is processed independently. The worker knows each participant's identity and language without speaker diarization.
 
-2. **Provider abstraction.** Production currently uses the verified fallback
-   pipeline: `gpt-realtime-whisper` transcription followed by configurable
-   text translation. The transcription WebSocket connects with
-   `intent=transcription`, sends a `session.type` of `transcription`, and uses
-   mono PCM16 audio at 24 kHz. Direct `gpt-realtime-translate` remains behind
-   the provider abstraction until English ↔ Thai quality and availability are
-   benchmarked.
+2. **Provider abstraction.** Production uses the `openai-hybrid` policy. The
+   synthetically validated English → Thai direction streams direct
+   `gpt-realtime-translate` transcript deltas for user UAT. Thai → English uses
+   `gpt-realtime-whisper` transcription
+   plus configurable text translation because direct synthetic Thai quality was
+   not consistent enough on dates and times. Debounced fallback partials are
+   revision-safe, and the final transcript always replaces the partial. A
+   direct-session failure automatically switches only that speaker to the
+   fallback. Both paths receive mono PCM16 audio at 24 kHz, and validated direct
+   source languages remain environment-configurable.
 
 3. **Private caption routing.** Captions are delivered through authenticated WebSocket connections. The backend enforces authorization server-side. Guests cannot access captions even by modifying frontend JavaScript. Internal users receive their configured caption language and a private preview of translations generated from their own microphone, so one-device translation testing does not require a second internal account.
 

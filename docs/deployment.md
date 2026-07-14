@@ -25,8 +25,12 @@ The production deployment runs on an Ubuntu VPS with Docker Compose:
 - [ ] LiveKit API key/secret rotated
 - [ ] PostgreSQL not publicly exposed
 - [ ] OpenAI API key set in worker environment only
-- [ ] Worker transcription model is `gpt-realtime-whisper` (or another verified
-      realtime transcription model) and is configured through the environment
+- [ ] Worker provider is `openai-hybrid`: direct `gpt-realtime-translate` for
+      validated English → Thai and transcribe-then-translate for Thai → English
+- [ ] `OPENAI_REALTIME_TRANSLATE_SOURCE_LANGUAGES` contains only directions that
+      passed realistic microphone quality validation
+- [ ] Fallback models remain configured for every source language and direct
+      session failures are visible in operational logs
 - [ ] Worker API and caption-router URLs resolve to the meeting API service; use
       a project-specific Docker network alias when the network is shared
 - [ ] Server reboot restores services (Docker restart policies)

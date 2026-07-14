@@ -9,6 +9,7 @@ import pytest
 
 from main import parse_participant_metadata
 from openai_transcribe import OpenAIRealtimeTranscribeProvider
+from openai_translate import OpenAIRealtimeTranslateProvider
 
 
 @pytest.mark.asyncio
@@ -165,3 +166,108 @@ async def test_realtime_audio_ignores_idle_silence_and_commits_after_speech() ->
         "input_audio_buffer.commit",
     ]
     assert provider._buffered_bytes == 0
+
+
+@pytest.mark.asyncio
+async def test_direct_translation_session_uses_translation_contract() -> None:
+    class FakeWebSocket:
+        def __init__(self) -> None:
+            self.sent: list[dict[str, object]] = []
+
+        async def send(self, payload: str) -> None:
+            self.sent.append(json.loads(payload))
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            await asyncio.Future()
+
+        async def close(self) -> None:
+            return None
+
+    websocket = FakeWebSocket()
+    provider = OpenAIRealtimeTranslateProvider(
+        api_key="test-key",
+        target_language="th",
+    )
+    connect = AsyncMock(return_value=websocket)
+
+    with patch("openai_translate.websockets.connect", new=connect):
+        await provider.start("en")
+
+    assert connect.await_args.args[0] == (
+        "wss://api.openai.com/v1/realtime/translations?model=gpt-realtime-translate"
+    )
+    assert websocket.sent == [
+        {
+            "type": "session.update",
+            "session": {"audio": {"output": {"language": "th"}}},
+        }
+    ]
+    await provider.stop()
+
+
+@pytest.mark.asyncio
+async def test_direct_translation_deltas_share_id_with_local_final() -> None:
+    provider = OpenAIRealtimeTranslateProvider(
+        api_key="test-key",
+        target_language="th",
+    )
+
+    await provider._dispatch(
+        {"type": "session.output_transcript.delta", "delta": "สวัส"}
+    )
+    await provider._dispatch({"type": "session.output_transcript.delta", "delta": "ดี"})
+    await provider._finalize_current()
+
+    first = await provider.receive()
+    second = await provider.receive()
+    final = await provider.receive()
+
+    assert first.text == "สวัส" and not first.is_final
+    assert second.text == "สวัสดี" and not second.is_final
+    assert final.text == "สวัสดี" and final.is_final
+    assert first.item_id == second.item_id == final.item_id
+    assert final.language == "th"
+
+
+@pytest.mark.asyncio
+async def test_late_direct_delta_revises_same_final_caption() -> None:
+    provider = OpenAIRealtimeTranslateProvider(
+        api_key="test-key",
+        target_language="en",
+    )
+
+    await provider._dispatch(
+        {"type": "session.output_transcript.delta", "delta": "Software"}
+    )
+    await provider._finalize_current()
+    first_partial = await provider.receive()
+    first_final = await provider.receive()
+
+    await provider._dispatch(
+        {"type": "session.output_transcript.delta", "delta": " update"}
+    )
+    await provider._finalize_current()
+    revised_partial = await provider.receive()
+    revised_final = await provider.receive()
+
+    assert first_partial.item_id == first_final.item_id
+    assert revised_partial.item_id == revised_final.item_id == first_final.item_id
+    assert revised_partial.text == "Software update"
+    assert revised_final.text == "Software update"
+
+
+@pytest.mark.asyncio
+async def test_direct_translation_errors_reach_pipeline_consumer() -> None:
+    provider = OpenAIRealtimeTranslateProvider(
+        api_key="test-key",
+        target_language="en",
+    )
+    await provider._dispatch(
+        {"type": "error", "error": {"code": "provider_unavailable"}}
+    )
+
+    with pytest.raises(RuntimeError, match="provider_unavailable"):
+        await provider.receive()
