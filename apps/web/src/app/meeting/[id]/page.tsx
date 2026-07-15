@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch, getApiUrl } from "@/lib/api";
+import { LanguageToggle } from "@/components/LanguageToggle";
+import { type UiLanguage, useUiLanguage } from "@/lib/ui-language";
 import {
   LiveKitRoom,
   GridLayout,
   ParticipantTile,
   RoomAudioRenderer,
-  ControlBar,
+  useLocalParticipant,
+  useRoomContext,
   useTracks,
 } from "@livekit/components-react";
 import { Track } from "livekit-client";
@@ -36,6 +39,31 @@ interface SystemLog {
   time: string;
 }
 
+const COPY = {
+  en: {
+    privateMeeting: "Private meeting", invalidClient: "This client session is no longer valid.", connectError: "Could not connect to the meeting.",
+    unable: "Unable to join", returnHome: "Return home", back: "Back to meetings", preparing: "Preparing your room", preparingMessage: "Connecting secure video, audio, and translation…",
+    leaveRoom: "Leave room", liveSecure: "Live · Secure", endsIn: "Ends in", ending: "Ending…", captions: "Captions", endMeeting: "End meeting", end: "End",
+    endConfirm: "End this meeting for everyone?", endError: "The meeting could not be ended.", translating: "Translating",
+    privateCaptions: "Private captions", captionPrivacy: "Only authorized internal users receive these.", translationReady: "Translation ready", connecting: "Connecting", reconnecting: "Reconnecting", unavailable: "Unavailable",
+    on: "On", off: "Off", captionSize: "Caption size", small: "Small", medium: "Medium", large: "Large", recentActivity: "Recent service activity",
+    translationUnavailable: "Translation is temporarily unavailable. The video call will continue.", serviceUpdate: "Translation service status updated.", close: "Close",
+    mute: "Mute", unmute: "Unmute", cameraOff: "Turn camera off", cameraOn: "Turn camera on", shareScreen: "Share screen", stopSharing: "Stop sharing", leave: "Leave",
+    mediaError: "The browser could not change that camera, microphone, or screen-sharing setting.", meetingControls: "Meeting controls",
+  },
+  th: {
+    privateMeeting: "การประชุมส่วนตัว", invalidClient: "เซสชันลูกค้านี้ไม่สามารถใช้งานได้แล้ว", connectError: "ไม่สามารถเชื่อมต่อกับการประชุมได้",
+    unable: "ไม่สามารถเข้าร่วมได้", returnHome: "กลับหน้าหลัก", back: "กลับไปยังการประชุม", preparing: "กำลังเตรียมห้อง", preparingMessage: "กำลังเชื่อมต่อวิดีโอ เสียง และระบบแปลภาษาที่ปลอดภัย…",
+    leaveRoom: "ออกจากห้อง", liveSecure: "กำลังประชุม · ปลอดภัย", endsIn: "สิ้นสุดใน", ending: "กำลังสิ้นสุด…", captions: "คำบรรยาย", endMeeting: "สิ้นสุดการประชุม", end: "สิ้นสุด",
+    endConfirm: "ต้องการสิ้นสุดการประชุมนี้สำหรับทุกคนหรือไม่", endError: "ไม่สามารถสิ้นสุดการประชุมได้", translating: "กำลังแปล",
+    privateCaptions: "คำบรรยายส่วนตัว", captionPrivacy: "เฉพาะผู้ใช้ภายในที่ได้รับอนุญาตเท่านั้นที่จะได้รับคำบรรยาย", translationReady: "พร้อมแปลภาษา", connecting: "กำลังเชื่อมต่อ", reconnecting: "กำลังเชื่อมต่อใหม่", unavailable: "ไม่พร้อมใช้งาน",
+    on: "เปิด", off: "ปิด", captionSize: "ขนาดคำบรรยาย", small: "เล็ก", medium: "กลาง", large: "ใหญ่", recentActivity: "กิจกรรมบริการล่าสุด",
+    translationUnavailable: "ระบบแปลภาษาไม่พร้อมใช้งานชั่วคราว แต่วิดีโอคอลจะทำงานต่อไป", serviceUpdate: "อัปเดตสถานะบริการแปลภาษาแล้ว", close: "ปิด",
+    mute: "ปิดไมค์", unmute: "เปิดไมค์", cameraOff: "ปิดกล้อง", cameraOn: "เปิดกล้อง", shareScreen: "แชร์หน้าจอ", stopSharing: "หยุดแชร์", leave: "ออกจากห้อง",
+    mediaError: "เบราว์เซอร์ไม่สามารถเปลี่ยนการตั้งค่ากล้อง ไมโครโฟน หรือการแชร์หน้าจอได้", meetingControls: "ตัวควบคุมการประชุม",
+  },
+} as const;
+
 function readRole(): string | null {
   try {
     const token = localStorage.getItem("access_token");
@@ -57,6 +85,9 @@ function formatCountdown(deadline: string | null, now: number) {
 export default function MeetingRoom() {
   const { id: meetingId } = useParams<{ id: string }>();
   const router = useRouter();
+  const { language, setLanguage } = useUiLanguage();
+  const languageRef = useRef<UiLanguage>(language);
+  const copy = COPY[language];
   const [token, setToken] = useState<string | null>(null);
   const [wsUrl, setWsUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +106,10 @@ export default function MeetingRoom() {
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const reconnectRef = useRef(0);
+
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
 
   const updateMeeting = useCallback(async () => {
     const res = await apiFetch(`/api/meetings/${meetingId}`);
@@ -97,7 +132,7 @@ export default function MeetingRoom() {
         if (guest) {
           setMeeting({
             id: meetingId,
-            title: sessionStorage.getItem("meeting_title") || "Private meeting",
+            title: sessionStorage.getItem("meeting_title") || COPY[languageRef.current].privateMeeting,
             status: "active",
             auto_end_at: sessionStorage.getItem("meeting_auto_end_at"),
             max_duration_minutes: 60,
@@ -106,26 +141,20 @@ export default function MeetingRoom() {
             method: "POST",
             body: JSON.stringify({ guest_session_token: guestSession, display_name: sessionStorage.getItem("display_name") || "Client" }),
           });
-          if (!res.ok) {
-            const data = await res.json().catch(() => null);
-            throw new Error(data?.detail || "This client session is no longer valid.");
-          }
+          if (!res.ok) throw new Error(COPY[languageRef.current].invalidClient);
           const data = await res.json();
           setToken(data.token);
           setWsUrl(data.ws_url);
         } else {
           await updateMeeting();
           const res = await apiFetch(`/api/meetings/${meetingId}/livekit-token`, { method: "POST" });
-          if (!res.ok) {
-            const data = await res.json().catch(() => null);
-            throw new Error(data?.detail || "Could not connect to the meeting.");
-          }
+          if (!res.ok) throw new Error(COPY[languageRef.current].connectError);
           const data = await res.json();
           setToken(data.token);
           setWsUrl(data.ws_url);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not connect to the meeting.");
+        setError(err instanceof Error ? err.message : COPY[languageRef.current].connectError);
       } finally {
         setLoading(false);
       }
@@ -175,15 +204,17 @@ export default function MeetingRoom() {
             const id = data.event_id || `${data.speaker_id}-${data.sequence}`;
             const line = { id, speaker: data.speaker_name, text: data.translated_text, isFinal: data.type === "caption.final" || Boolean(data.is_final) };
             setCurrentCaption(line);
-            if (line.isFinal) {
-              setCaptionHistory((previous) => [...previous.filter((item) => item.id !== id), line].slice(-3));
-            }
+            if (line.isFinal) setCaptionHistory((previous) => [...previous.filter((item) => item.id !== id), line].slice(-3));
           } else if (data.type === "system.error" || data.type === "system.info") {
-            const log = { id: `${Date.now()}-${Math.random()}`, type: data.type, message: data.message, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) };
+            const localizedCopy = COPY[languageRef.current];
+            const message = languageRef.current === "th"
+              ? data.type === "system.error" ? localizedCopy.translationUnavailable : localizedCopy.serviceUpdate
+              : data.message;
+            const log = { id: `${Date.now()}-${Math.random()}`, type: data.type, message, time: new Date().toLocaleTimeString(languageRef.current === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" }) };
             setSystemLogs((previous) => [...previous, log].slice(-12));
             if (data.type === "system.error") {
               setTranslationStatus("unavailable");
-              setSystemAlerts((previous) => [...previous, { id: log.id, message: data.message }]);
+              setSystemAlerts((previous) => [...previous, { id: log.id, message }]);
             }
           }
         } catch {
@@ -215,21 +246,20 @@ export default function MeetingRoom() {
   }
 
   async function endMeeting() {
-    if (!window.confirm("End this meeting for everyone?")) return;
+    if (!window.confirm(copy.endConfirm)) return;
     setEnding(true);
     const res = await apiFetch(`/api/meetings/${meetingId}/end`, { method: "POST" });
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setSystemAlerts((previous) => [...previous, { id: `${Date.now()}`, message: data?.detail || "The meeting could not be ended." }]);
+      setSystemAlerts((previous) => [...previous, { id: `${Date.now()}`, message: copy.endError }]);
       setEnding(false);
     }
   }
 
   if (error) {
-    return <MeetingState title="Unable to join" message={error} action={() => router.push(isGuest ? "/" : "/dashboard")} actionLabel={isGuest ? "Return home" : "Back to meetings"} />;
+    return <MeetingState title={copy.unable} message={error} action={() => router.push(isGuest ? "/" : "/dashboard")} actionLabel={isGuest ? copy.returnHome : copy.back} language={language} onLanguageChange={setLanguage} />;
   }
   if (loading || !token) {
-    return <MeetingState title="Preparing your room" message="Connecting secure video, audio, and translation…" loading />;
+    return <MeetingState title={copy.preparing} message={copy.preparingMessage} loading language={language} onLanguageChange={setLanguage} />;
   }
 
   return (
@@ -238,14 +268,15 @@ export default function MeetingRoom() {
         <div className="relative flex h-full flex-col overflow-hidden">
           <header className="pointer-events-none fixed inset-x-0 top-0 z-40 flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/75 px-4 py-3 backdrop-blur-xl sm:px-6">
             <div className="pointer-events-auto flex min-w-0 items-center gap-3">
-              <button onClick={handleDisconnected} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition hover:text-white" aria-label="Leave room">←</button>
-              <div className="min-w-0"><h1 className="truncate text-sm font-semibold text-white sm:text-base">{meeting?.title || "Private meeting"}</h1><div className="mt-0.5 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.7)]" /> Live · Secure</div></div>
+              <button onClick={handleDisconnected} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition hover:text-white" aria-label={copy.leaveRoom}>←</button>
+              <div className="min-w-0"><h1 className="truncate text-sm font-semibold text-white sm:text-base">{meeting?.title || copy.privateMeeting}</h1><div className="mt-0.5 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.7)]" /> {copy.liveSecure}</div></div>
             </div>
 
             <div className="pointer-events-auto flex items-center gap-2">
-              <div className={`hidden items-center gap-2 rounded-xl border px-3 py-2 text-xs sm:flex ${deadlineReached ? "border-amber-400/20 bg-amber-400/10 text-amber-200" : "border-white/10 bg-white/5 text-slate-300"}`}><span className="text-slate-500">Ends in</span><span className="font-mono font-semibold tabular-nums">{deadlineReached ? "Ending…" : countdown}</span></div>
-              {!isGuest && <button onClick={() => setSettingsOpen((open) => !open)} className={`secondary-button !px-3 !py-2 ${settingsOpen ? "!border-cyan-400/30 !text-cyan-200" : ""}`}><span className="rounded bg-white/10 px-1 text-[10px]">CC</span><span className="hidden sm:inline">Captions</span></button>}
-              {role === "host" && <button onClick={endMeeting} disabled={ending} className="danger-button !px-3 !py-2"><span className="hidden sm:inline">{ending ? "Ending…" : "End meeting"}</span><span className="sm:hidden">End</span></button>}
+              <div className={`hidden items-center gap-2 rounded-xl border px-3 py-2 text-xs md:flex ${deadlineReached ? "border-amber-400/20 bg-amber-400/10 text-amber-200" : "border-white/10 bg-white/5 text-slate-300"}`}><span className="text-slate-500">{copy.endsIn}</span><span className="font-mono font-semibold tabular-nums">{deadlineReached ? copy.ending : countdown}</span></div>
+              <LanguageToggle language={language} onChange={setLanguage} compact />
+              {!isGuest && <button onClick={() => setSettingsOpen((open) => !open)} className={`secondary-button !px-3 !py-2 ${settingsOpen ? "!border-cyan-400/30 !text-cyan-200" : ""}`}><span className="rounded bg-white/10 px-1 text-[10px]">CC</span><span className="hidden sm:inline">{copy.captions}</span></button>}
+              {role === "host" && <button onClick={endMeeting} disabled={ending} className="danger-button !px-3 !py-2"><span className="hidden sm:inline">{ending ? copy.ending : copy.endMeeting}</span><span className="sm:hidden">{copy.end}</span></button>}
             </div>
           </header>
 
@@ -256,27 +287,27 @@ export default function MeetingRoom() {
               {previousCaptions.map((line) => <p key={line.id} className="mb-1 truncate text-xs text-slate-500"><span className="font-medium text-slate-400">{line.speaker}:</span> {line.text}</p>)}
               <span className="caption-speaker">{currentCaption.speaker}</span>
               <p className={`${captionSize} font-medium leading-snug tracking-[-0.01em]`}>{currentCaption.text}</p>
-              {!currentCaption.isFinal && <span className="mt-2 inline-flex items-center gap-1 text-[10px] text-slate-500"><span className="h-1 w-1 animate-pulse rounded-full bg-cyan-300" /> Translating</span>}
+              {!currentCaption.isFinal && <span className="mt-2 inline-flex items-center gap-1 text-[10px] text-slate-500"><span className="h-1 w-1 animate-pulse rounded-full bg-cyan-300" /> {copy.translating}</span>}
             </div>
           )}
 
           {systemAlerts.length > 0 && !isGuest && (
             <div className="fixed right-4 top-20 z-50 flex max-w-sm flex-col gap-2">
-              {systemAlerts.map((alert) => <div key={alert.id} className="flex items-start gap-3 rounded-xl border border-rose-400/25 bg-rose-950/90 px-4 py-3 text-sm text-rose-100 shadow-2xl backdrop-blur"><span className="mt-0.5 text-rose-300">!</span><span className="flex-1">{alert.message}</span><button onClick={() => setSystemAlerts((previous) => previous.filter((item) => item.id !== alert.id))} className="text-rose-300">×</button></div>)}
+              {systemAlerts.map((alert) => <div key={alert.id} className="flex items-start gap-3 rounded-xl border border-rose-400/25 bg-rose-950/90 px-4 py-3 text-sm text-rose-100 shadow-2xl backdrop-blur"><span className="mt-0.5 text-rose-300">!</span><span className="flex-1">{alert.message}</span><button onClick={() => setSystemAlerts((previous) => previous.filter((item) => item.id !== alert.id))} className="text-rose-300" aria-label={copy.close}>×</button></div>)}
             </div>
           )}
 
           {settingsOpen && !isGuest && (
             <aside className="fixed right-4 top-20 z-40 w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-5 shadow-2xl backdrop-blur-xl">
-              <div className="flex items-center justify-between"><div><h2 className="font-semibold text-white">Private captions</h2><p className="mt-1 text-xs text-slate-500">Only authorized internal users receive these.</p></div><button onClick={() => setSettingsOpen(false)} className="text-xl text-slate-500 hover:text-white">×</button></div>
-              <div className="mt-5 flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.025] p-3"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${translationStatus === "ready" ? "bg-emerald-400" : translationStatus === "unavailable" ? "bg-rose-400" : "animate-pulse bg-amber-300"}`} /><span className="text-sm capitalize text-slate-300">{translationStatus === "ready" ? "Translation ready" : translationStatus}</span></div><button onClick={() => setCaptionsEnabled((enabled) => !enabled)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${captionsEnabled ? "bg-cyan-400 text-slate-950" : "bg-white/10 text-slate-400"}`}>{captionsEnabled ? "On" : "Off"}</button></div>
-              <div className="mt-4"><p className="mb-2 text-xs font-medium text-slate-500">Caption size</p><div className="grid grid-cols-3 gap-1 rounded-xl bg-white/[0.035] p-1">{(["small", "medium", "large"] as const).map((size) => <button key={size} onClick={() => setFontSize(size)} className={`rounded-lg py-2 text-xs capitalize transition ${fontSize === size ? "bg-white/10 text-white" : "text-slate-500 hover:text-slate-300"}`}>{size}</button>)}</div></div>
-              {systemLogs.length > 0 && <div className="mt-5 border-t border-white/10 pt-4"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">Recent service activity</p><div className="mt-2 max-h-28 space-y-2 overflow-y-auto">{systemLogs.slice(-4).map((log) => <div key={log.id} className="flex gap-2 text-[11px] leading-4 text-slate-500"><span className="shrink-0 font-mono text-slate-600">{log.time}</span><span>{log.message}</span></div>)}</div></div>}
+              <div className="flex items-center justify-between"><div><h2 className="font-semibold text-white">{copy.privateCaptions}</h2><p className="mt-1 text-xs text-slate-500">{copy.captionPrivacy}</p></div><button onClick={() => setSettingsOpen(false)} className="text-xl text-slate-500 hover:text-white" aria-label={copy.close}>×</button></div>
+              <div className="mt-5 flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.025] p-3"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${translationStatus === "ready" ? "bg-emerald-400" : translationStatus === "unavailable" ? "bg-rose-400" : "animate-pulse bg-amber-300"}`} /><span className="text-sm text-slate-300">{translationStatus === "ready" ? copy.translationReady : translationStatus === "connecting" ? copy.connecting : translationStatus === "reconnecting" ? copy.reconnecting : copy.unavailable}</span></div><button onClick={() => setCaptionsEnabled((enabled) => !enabled)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${captionsEnabled ? "bg-cyan-400 text-slate-950" : "bg-white/10 text-slate-400"}`}>{captionsEnabled ? copy.on : copy.off}</button></div>
+              <div className="mt-4"><p className="mb-2 text-xs font-medium text-slate-500">{copy.captionSize}</p><div className="grid grid-cols-3 gap-1 rounded-xl bg-white/[0.035] p-1">{(["small", "medium", "large"] as const).map((size) => <button key={size} onClick={() => setFontSize(size)} className={`rounded-lg py-2 text-xs transition ${fontSize === size ? "bg-white/10 text-white" : "text-slate-500 hover:text-slate-300"}`}>{copy[size]}</button>)}</div></div>
+              {systemLogs.length > 0 && <div className="mt-5 border-t border-white/10 pt-4"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">{copy.recentActivity}</p><div className="mt-2 max-h-28 space-y-2 overflow-y-auto">{systemLogs.slice(-4).map((log) => <div key={log.id} className="flex gap-2 text-[11px] leading-4 text-slate-500"><span className="shrink-0 font-mono text-slate-600">{log.time}</span><span>{log.message}</span></div>)}</div></div>}
             </aside>
           )}
 
           <RoomAudioRenderer />
-          <ControlBar />
+          <LocalizedControlBar language={language} />
         </div>
       </LiveKitRoom>
     </main>
@@ -291,6 +322,53 @@ function MeetingVideoGrid() {
   return <GridLayout tracks={tracks} style={{ height: "100%" }}><ParticipantTile /></GridLayout>;
 }
 
-function MeetingState({ title, message, loading = false, action, actionLabel }: { title: string; message: string; loading?: boolean; action?: () => void; actionLabel?: string }) {
-  return <main className="grid min-h-screen place-items-center p-6"><div className="glass-panel max-w-md rounded-[1.75rem] p-9 text-center">{loading ? <span className="mx-auto block h-9 w-9 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" /> : <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-rose-400/10 text-xl text-rose-300">!</span>}<h1 className="mt-5 text-2xl font-semibold text-white">{title}</h1><p className="mt-3 text-sm leading-6 text-slate-400">{message}</p>{action && <button onClick={action} className="secondary-button mt-6">{actionLabel}</button>}</div></main>;
+function LocalizedControlBar({ language }: { language: UiLanguage }) {
+  const copy = COPY[language];
+  const room = useRoomContext();
+  const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } = useLocalParticipant();
+  const [mediaError, setMediaError] = useState<string | null>(null);
+
+  async function changeMedia(action: () => Promise<unknown>) {
+    setMediaError(null);
+    try {
+      await action();
+    } catch {
+      setMediaError(copy.mediaError);
+    }
+  }
+
+  const controls = [
+    { key: "microphone", active: isMicrophoneEnabled, label: isMicrophoneEnabled ? copy.mute : copy.unmute, action: () => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled) },
+    { key: "camera", active: isCameraEnabled, label: isCameraEnabled ? copy.cameraOff : copy.cameraOn, action: () => localParticipant.setCameraEnabled(!isCameraEnabled) },
+    { key: "screen", active: isScreenShareEnabled, label: isScreenShareEnabled ? copy.stopSharing : copy.shareScreen, action: () => localParticipant.setScreenShareEnabled(!isScreenShareEnabled) },
+  ] as const;
+
+  return (
+    <div className="localized-control-bar" aria-label={copy.meetingControls}>
+      {mediaError && <div role="alert" className="absolute bottom-full mb-3 rounded-xl border border-rose-400/25 bg-rose-950/95 px-4 py-2 text-xs text-rose-100 shadow-xl">{mediaError}</div>}
+      <div className="flex items-center justify-center gap-2">
+        {controls.map((control) => (
+          <button key={control.key} type="button" onClick={() => changeMedia(control.action)} title={control.label} aria-label={control.label} className={`meeting-control-button ${!control.active && control.key !== "screen" ? "meeting-control-button-off" : ""} ${control.active && control.key === "screen" ? "!border-cyan-400/30 !bg-cyan-400/10 !text-cyan-200" : ""}`}>
+            <ControlIcon kind={control.key} off={!control.active && control.key !== "screen"} />
+            <span className="hidden text-xs font-medium sm:inline">{control.label}</span>
+          </button>
+        ))}
+        <button type="button" onClick={() => room.disconnect()} title={copy.leave} aria-label={copy.leave} className="meeting-control-button meeting-leave-button">
+          <ControlIcon kind="leave" />
+          <span className="hidden text-xs font-medium sm:inline">{copy.leave}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ControlIcon({ kind, off = false }: { kind: "microphone" | "camera" | "screen" | "leave"; off?: boolean }) {
+  if (kind === "microphone") return <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6" />{off && <path d="m4 4 16 16" strokeWidth="2.2" />}</svg>;
+  if (kind === "camera") return <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="6" width="13" height="12" rx="2" /><path d="m16 10 5-3v10l-5-3" />{off && <path d="m3 3 18 18" strokeWidth="2.2" />}</svg>;
+  if (kind === "screen") return <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4M12 13V7m0 0-3 3m3-3 3 3" />{off && <path d="m3 3 18 18" strokeWidth="2.2" />}</svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h5M14 8l4 4-4 4M8 12h10" /></svg>;
+}
+
+function MeetingState({ title, message, language, onLanguageChange, loading = false, action, actionLabel }: { title: string; message: string; language: UiLanguage; onLanguageChange: (language: UiLanguage) => void; loading?: boolean; action?: () => void; actionLabel?: string }) {
+  return <main className="relative grid min-h-screen place-items-center p-6"><div className="absolute right-5 top-5"><LanguageToggle language={language} onChange={onLanguageChange} /></div><div className="glass-panel max-w-md rounded-[1.75rem] p-9 text-center">{loading ? <span className="mx-auto block h-9 w-9 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" /> : <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-rose-400/10 text-xl text-rose-300">!</span>}<h1 className="mt-5 text-2xl font-semibold text-white">{title}</h1><p className="mt-3 text-sm leading-6 text-slate-400">{message}</p>{action && <button onClick={action} className="secondary-button mt-6">{actionLabel}</button>}</div></main>;
 }

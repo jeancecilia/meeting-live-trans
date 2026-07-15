@@ -45,6 +45,10 @@
   .danger-button { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-200 transition hover:border-rose-400/35 hover:bg-rose-500/20; }
   .caption-overlay { @apply fixed bottom-24 left-1/2 z-50 w-[min(760px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-white/10 bg-slate-950/90 px-6 py-4 text-center text-white shadow-2xl backdrop-blur-xl; }
   .caption-speaker { @apply mb-1 block text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-300; }
+  .localized-control-bar { @apply fixed inset-x-0 bottom-0 z-[60] flex min-h-[68px] items-center justify-center border-t border-white/10 bg-slate-950/90 px-4 py-3 backdrop-blur-xl; }
+  .meeting-control-button { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.055] px-3 text-slate-200 transition hover:border-white/20 hover:bg-white/[0.09] sm:px-4; }
+  .meeting-control-button-off { @apply border-rose-400/20 bg-rose-500/10 text-rose-200 hover:border-rose-400/30 hover:bg-rose-500/20; }
+  .meeting-leave-button { @apply ml-1 border-rose-400/20 bg-rose-500/10 text-rose-200 hover:border-rose-400/35 hover:bg-rose-500/20; }
 }
 
 @keyframes lift-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
