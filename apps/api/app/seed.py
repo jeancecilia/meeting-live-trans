@@ -17,8 +17,8 @@ from app.models.user import User
 
 ENGLISH_PASSWORD = os.environ.get("SEED_ENGLISH_PASSWORD", "")
 THAI_PASSWORD = os.environ.get("SEED_THAI_PASSWORD", "")
-ENGLISH_EMAIL = os.environ.get("SEED_ENGLISH_EMAIL", "english@meetingtest.com").strip().lower()
-THAI_EMAIL = os.environ.get("SEED_THAI_EMAIL", "thai@meetingtest.com").strip().lower()
+ENGLISH_EMAIL = os.environ.get("SEED_ENGLISH_EMAIL", "jeancecilia123@gmail.com").strip().lower()
+THAI_EMAIL = os.environ.get("SEED_THAI_EMAIL", "umfon.14@gmail.com").strip().lower()
 DEFAULT_DEV = "dev_password_change_me"
 
 

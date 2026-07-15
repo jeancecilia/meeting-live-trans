@@ -68,8 +68,8 @@ services:
       - PUBLIC_WEB_URL=http://localhost:3000
       - MEETING_MAX_DURATION_MINUTES=60
       - MEETING_EXPIRY_SWEEP_SECONDS=15
-      - SEED_ENGLISH_EMAIL=${SEED_ENGLISH_EMAIL:-english@meetingtest.com}
-      - SEED_THAI_EMAIL=${SEED_THAI_EMAIL:-thai@meetingtest.com}
+      - SEED_ENGLISH_EMAIL=${SEED_ENGLISH_EMAIL:-jeancecilia123@gmail.com}
+      - SEED_THAI_EMAIL=${SEED_THAI_EMAIL:-umfon.14@gmail.com}
       - CAPTION_WORKER_SERVICE_TOKEN=${CAPTION_WORKER_SERVICE_TOKEN:-change-me-worker-service-token}
     depends_on:
       postgres:
