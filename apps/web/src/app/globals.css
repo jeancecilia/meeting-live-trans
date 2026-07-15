@@ -4,26 +4,32 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
-    --ink: #f7f9fc;
-    --muted: #8d9ab0;
-    --line: rgba(148, 163, 184, 0.14);
+    color-scheme: light;
+    --ink: #20273a;
+    --muted: #6f7280;
+    --navy: #293047;
+    --navy-deep: #1d2438;
+    --bronze: #aa7d61;
+    --bronze-dark: #8e654d;
+    --ivory: #f7f4f0;
+    --line: rgba(79, 65, 55, 0.16);
   }
 
   * { box-sizing: border-box; }
-  html { background: #070b14; }
+  html { background: var(--ivory); }
   body {
     min-height: 100vh;
     margin: 0;
     color: var(--ink);
     background:
-      radial-gradient(circle at 12% -10%, rgba(34, 211, 238, 0.14), transparent 34rem),
-      radial-gradient(circle at 92% 12%, rgba(139, 92, 246, 0.12), transparent 30rem),
-      #070b14;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      linear-gradient(rgba(247, 244, 240, 0.94), rgba(247, 244, 240, 0.98)),
+      repeating-linear-gradient(90deg, transparent 0, transparent 79px, rgba(170, 125, 97, 0.035) 80px);
+    font-family: "Source Sans Pro", "Noto Sans Thai", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
-  ::selection { color: white; background: rgba(14, 165, 233, 0.55); }
+  html[lang="en"] h1,
+  html[lang="en"] h2 { font-family: Georgia, "Times New Roman", serif; }
+  ::selection { color: white; background: rgba(170, 125, 97, 0.72); }
   button, input, select { font: inherit; }
 }
 
@@ -31,49 +37,123 @@
   .app-shell { @apply min-h-screen px-5 py-6 sm:px-8 lg:px-10; }
   .glass-panel {
     border: 1px solid var(--line);
-    background: linear-gradient(145deg, rgba(20, 30, 51, 0.84), rgba(10, 16, 29, 0.78));
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.035);
-    backdrop-filter: blur(24px);
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 22px 60px rgba(41, 48, 71, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(18px);
   }
-  .surface-panel { border: 1px solid var(--line); background: rgba(15, 23, 42, 0.58); }
-  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300/80; }
-  .field-label { @apply mb-2 block text-sm font-medium text-slate-300; }
-  .field { @apply w-full rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 text-[15px] text-white outline-none transition placeholder:text-slate-600 hover:border-white/20 focus:border-cyan-400/60 focus:ring-4 focus:ring-cyan-400/10; }
-  .primary-button { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-500 px-4 py-3 text-sm font-semibold text-slate-950 shadow-[0_12px_32px_rgba(14,165,233,0.18)] transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40; }
-  .secondary-button { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.045] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/20 hover:bg-white/[0.075] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40; }
-  .ghost-button { @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/[0.055] hover:text-white; }
-  .danger-button { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-200 transition hover:border-rose-400/35 hover:bg-rose-500/20; }
-  .caption-overlay { @apply fixed bottom-24 left-1/2 z-50 w-[min(760px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-white/10 bg-slate-950/90 px-6 py-4 text-center text-white shadow-2xl backdrop-blur-xl; }
-  .caption-speaker { @apply mb-1 block text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-300; }
-  .localized-control-bar { @apply fixed inset-x-0 bottom-0 z-[60] flex min-h-[68px] items-center justify-center border-t border-white/10 bg-slate-950/90 px-4 py-3 backdrop-blur-xl; }
-  .meeting-control-button { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.055] px-3 text-slate-200 transition hover:border-white/20 hover:bg-white/[0.09] sm:px-4; }
+  .surface-panel { border: 1px solid var(--line); background: rgba(255, 255, 255, 0.72); }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.2em]; color: var(--bronze-dark); }
+  .field-label { @apply mb-2 block text-sm font-semibold; color: #363b4c; }
+  .field {
+    @apply w-full rounded-lg border bg-white px-4 py-3 text-[15px] outline-none transition;
+    border-color: rgba(79, 65, 55, 0.2);
+    color: var(--ink);
+    box-shadow: inset 0 1px 2px rgba(41, 48, 71, 0.035);
+  }
+  .field::placeholder { color: #a5a1a0; }
+  .field:hover { border-color: rgba(170, 125, 97, 0.46); }
+  .field:focus { border-color: var(--bronze); box-shadow: 0 0 0 4px rgba(170, 125, 97, 0.12); }
+  .primary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40;
+    background: linear-gradient(135deg, #b2866b, #966b53);
+    box-shadow: 0 12px 28px rgba(142, 101, 77, 0.2);
+  }
+  .primary-button:hover { filter: brightness(1.06); }
+  .secondary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border bg-white px-4 py-3 text-sm font-semibold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40;
+    border-color: rgba(41, 48, 71, 0.16);
+    color: var(--navy);
+  }
+  .secondary-button:hover { border-color: rgba(170, 125, 97, 0.55); background: #fbf8f5; }
+  .ghost-button { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition; color: #686b77; }
+  .ghost-button:hover { background: rgba(170, 125, 97, 0.09); color: var(--navy); }
+  .danger-button { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-700 transition hover:border-rose-400/35 hover:bg-rose-500/20; }
+  .caption-overlay { @apply fixed bottom-24 left-1/2 z-50 w-[min(760px,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border px-6 py-4 text-center text-white shadow-2xl backdrop-blur-xl; border-color: rgba(178, 134, 107, 0.28); background: rgba(29, 36, 56, 0.94); }
+  .caption-speaker { @apply mb-1 block text-[11px] font-semibold uppercase tracking-[0.16em]; color: #d4a98d; }
+  .localized-control-bar { @apply fixed inset-x-0 bottom-0 z-[60] flex min-h-[68px] items-center justify-center border-t bg-slate-950/90 px-4 py-3 backdrop-blur-xl; border-color: rgba(178, 134, 107, 0.2); }
+  .meeting-control-button { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.055] px-3 text-slate-200 transition hover:bg-white/[0.09] sm:px-4; }
+  .meeting-control-button:hover { border-color: rgba(178, 134, 107, 0.45); }
   .meeting-control-button-off { @apply border-rose-400/20 bg-rose-500/10 text-rose-200 hover:border-rose-400/30 hover:bg-rose-500/20; }
   .meeting-leave-button { @apply ml-1 border-rose-400/20 bg-rose-500/10 text-rose-200 hover:border-rose-400/35 hover:bg-rose-500/20; }
 }
+
+.law-mark { color: var(--bronze); transition: transform 180ms ease; }
+.group:hover .law-mark { transform: translateY(-1px); }
+.law-brand-name { color: var(--navy); font-family: Georgia, "Times New Roman", serif; }
+.law-brand-subtitle { color: #8f725f; }
+.language-toggle { border-color: rgba(41, 48, 71, 0.16); background: rgba(255, 255, 255, 0.78); }
+.language-toggle-active { color: white; background: var(--navy); }
+.language-toggle-inactive { color: #777985; }
+.language-toggle-inactive:hover { color: var(--navy); background: rgba(170, 125, 97, 0.08); }
+
+.app-shell .text-white { color: var(--navy) !important; }
+.app-shell .text-slate-200 { color: #424759 !important; }
+.app-shell .text-slate-300 { color: #505564 !important; }
+.app-shell .text-slate-400 { color: #696d79 !important; }
+.app-shell .text-slate-500 { color: #85838a !important; }
+.app-shell .text-slate-600 { color: #9b9693 !important; }
+.app-shell .text-cyan-200,
+.app-shell .text-cyan-300 { color: var(--bronze-dark) !important; }
+.app-shell .border-cyan-400\/15,
+.app-shell .border-cyan-400\/20 { border-color: rgba(170, 125, 97, 0.26) !important; }
+.app-shell .bg-cyan-400\/\[0\.07\],
+.app-shell .bg-cyan-400\/10 { background-color: rgba(170, 125, 97, 0.09) !important; }
+.app-shell .border-white\/10 { border-color: rgba(79, 65, 55, 0.16) !important; }
+.app-shell .bg-slate-950\/50,
+.app-shell .bg-slate-950\/60 { background-color: rgba(247, 244, 240, 0.78) !important; }
+.app-shell .bg-white\/5,
+.app-shell .bg-white\/\[0\.025\],
+.app-shell .bg-white\/\[0\.035\],
+.app-shell .bg-white\/\[0\.045\] { background-color: rgba(170, 125, 97, 0.07) !important; }
+.law-accent-text { color: var(--bronze-dark) !important; }
+.law-office-rule { border-color: rgba(170, 125, 97, 0.35); }
+.law-topbar { color: white !important; background: var(--navy); }
+.law-topbar * { color: white !important; }
+
+.law-photo-panel {
+  isolation: isolate;
+  border-color: rgba(178, 134, 107, 0.48);
+  background-image:
+    linear-gradient(150deg, rgba(16, 20, 33, 0.9), rgba(24, 28, 43, 0.68)),
+    url("https://en.udonthanilawyer.com/wp-content/uploads/2025/04/cropped-shot-of-judge-pointing-at-papers-and-clien-FZFUBMU.jpg");
+  background-position: center;
+  background-size: cover;
+  box-shadow: 0 28px 70px rgba(41, 48, 71, 0.22);
+}
+.law-photo-panel .text-white { color: white !important; }
+.law-photo-panel .text-slate-300 { color: #e9e5e2 !important; }
+.law-photo-panel .text-slate-500 { color: #b9b4b1 !important; }
+.law-photo-panel .text-cyan-300 { color: #d6aa8d !important; }
+.law-photo-panel .border-cyan-400\/30 { border-color: rgba(214, 170, 141, 0.5) !important; }
 
 @keyframes lift-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .animate-lift-in { animation: lift-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 .meeting-shell [data-lk-theme="default"] {
-  --lk-bg: #070b14;
-  --lk-bg2: #0f172a;
-  --lk-control-bg: rgba(15, 23, 42, 0.88);
-  --lk-control-hover-bg: rgba(51, 65, 85, 0.9);
-  --lk-accent-bg: #22d3ee;
-  --lk-accent-fg: #071019;
+  --lk-bg: #171d2e;
+  --lk-bg2: #232a3f;
+  --lk-control-bg: rgba(29, 36, 56, 0.9);
+  --lk-control-hover-bg: rgba(54, 61, 82, 0.92);
+  --lk-accent-bg: #b2866b;
+  --lk-accent-fg: white;
 }
+.meeting-shell .language-toggle { border-color: rgba(178, 134, 107, 0.24); background: rgba(17, 22, 36, 0.72); }
+.meeting-shell .language-toggle-active { color: white; background: #a97c61; }
+.meeting-shell .language-toggle-inactive { color: #8d94a8; }
+.meeting-shell .language-toggle-inactive:hover { color: white; background: rgba(178, 134, 107, 0.12); }
+.meeting-shell .secondary-button { border-color: rgba(178, 134, 107, 0.22); background: rgba(178, 134, 107, 0.08); color: #e7d2c4; }
+.meeting-shell .secondary-button:hover { border-color: rgba(178, 134, 107, 0.42); background: rgba(178, 134, 107, 0.15); }
 .meeting-shell .lk-grid-layout { gap: 0.75rem; padding: 5.75rem 1rem 6rem; }
 .meeting-shell .lk-participant-tile {
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 1.25rem;
-  background: linear-gradient(145deg, #111b2e, #0a101d);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(178, 134, 107, 0.18);
+  border-radius: 0.85rem;
+  background: linear-gradient(145deg, #252d43, #161c2d);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
 }
-.meeting-shell .lk-participant-tile[data-lk-speaking="true"] { border-color: rgba(34, 211, 238, 0.65); box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.12), 0 18px 50px rgba(0, 0, 0, 0.2); }
-.meeting-shell .lk-participant-metadata { margin: 0.65rem; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0.7rem; background: rgba(7, 11, 20, 0.78); backdrop-filter: blur(12px); }
-.meeting-shell .lk-control-bar { border: 0; border-top: 1px solid rgba(148, 163, 184, 0.12); background: rgba(7, 11, 20, 0.92); padding: 0.7rem 1rem; backdrop-filter: blur(20px); }
-.meeting-shell .lk-button { border-radius: 0.8rem; }
+.meeting-shell .lk-participant-tile[data-lk-speaking="true"] { border-color: rgba(178, 134, 107, 0.85); box-shadow: 0 0 0 2px rgba(178, 134, 107, 0.14), 0 18px 50px rgba(0, 0, 0, 0.24); }
+.meeting-shell .lk-participant-metadata { margin: 0.65rem; border: 1px solid rgba(178, 134, 107, 0.16); border-radius: 0.55rem; background: rgba(23, 29, 46, 0.84); backdrop-filter: blur(12px); }
+.meeting-shell .lk-button { border-radius: 0.6rem; }
 
 ::-webkit-scrollbar { width: 9px; height: 9px; }
-::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(148, 163, 184, 0.24); background-clip: padding-box; }
+::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(132, 107, 91, 0.28); background-clip: padding-box; }

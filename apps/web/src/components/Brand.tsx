@@ -1,15 +1,24 @@
 import Link from "next/link";
 
+export function LawMark({ className = "h-10 w-10" }: { className?: string }) {
+  return (
+    <span className={`law-mark grid shrink-0 place-items-center ${className}`} aria-hidden>
+      <svg viewBox="0 0 48 48" className="h-[72%] w-[72%]" fill="none">
+        <path d="M7 18 24 7l17 11H7Z" fill="currentColor" />
+        <path d="M10 21h28M12 36h24M8 41h32" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+        <path d="M14 22v13M21 22v13M27 22v13M34 22v13" stroke="currentColor" strokeWidth="3" />
+      </svg>
+    </span>
+  );
+}
+
 export function Brand({ href = "/" }: { href?: string }) {
   return (
-    <Link href={href} className="group inline-flex items-center gap-3" aria-label="LumaMeet home / หน้าหลัก LumaMeet">
-      <span className="relative grid h-10 w-10 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-cyan-300 via-sky-400 to-violet-500 shadow-[0_12px_32px_rgba(56,189,248,0.24)] transition-transform group-hover:scale-[1.03]">
-        <span className="absolute inset-[1px] rounded-[15px] bg-slate-950/30" />
-        <span className="relative text-[11px] font-black tracking-[-0.08em] text-white">A/ก</span>
-      </span>
+    <Link href={href} className="group inline-flex items-center gap-3" aria-label="UdonLaw home / หน้าหลักอุดรลอว์">
+      <LawMark />
       <span>
-        <span className="block text-[15px] font-semibold tracking-[-0.02em] text-white">LumaMeet</span>
-        <span className="block text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">English · ไทย</span>
+        <span className="law-brand-name block text-[17px] font-semibold tracking-[-0.02em]">UdonLaw</span>
+        <span className="law-brand-subtitle block text-[9px] font-semibold uppercase tracking-[0.16em]">สำนักงานกฎหมาย · Law Office</span>
       </span>
     </Link>
   );

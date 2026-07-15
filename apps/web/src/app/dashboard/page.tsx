@@ -34,36 +34,36 @@ interface ShareDetails extends InviteResult {
 
 const COPY = {
   en: {
-    workspace: "Internal workspace", signOut: "Sign out", eyebrow: "Meeting workspace", heading: "Your conversations",
-    intro: "Create a room, copy the private client link, and join when you are ready. Every room closes automatically after 60 minutes.",
-    newMeeting: "New meeting", liveNow: "Live now", ready: "Ready", completed: "Completed", live: "Live", ended: "Ended",
-    loading: "Loading your meetings…", emptyTitle: "Your first meeting starts here", emptyText: "Create a room and we will generate the client invitation link automatically.",
-    createMeeting: "Create a meeting", clientLink: "Client link", joinRoom: "Join room", end: "End", completedTime: "Completed", limit: "60 minute limit", endingNow: "Ending now", remaining: "remaining",
-    createTitle: "Create a meeting", createSubtitle: "A private, single-use client link will be created with the room.", meetingTitle: "Meeting title", meetingPlaceholder: "Client project consultation",
+    workspace: "UdonLaw internal", signOut: "Sign out", eyebrow: "Legal consultation workspace", heading: "Client consultations",
+    intro: "Open a confidential consultation room, send the secure invitation to your client, and meet with English ↔ Thai interpretation when needed.",
+    newMeeting: "New consultation", liveNow: "In session", ready: "Ready", completed: "Closed", live: "In session", ended: "Closed",
+    loading: "Loading consultations…", emptyTitle: "Create your first consultation room", emptyText: "Open a secure room and the client’s confidential invitation will be prepared automatically.",
+    createMeeting: "Create consultation", clientLink: "Client invitation", joinRoom: "Open room", end: "End", completedTime: "Closed", limit: "60-minute limit", endingNow: "Ending now", remaining: "remaining",
+    createTitle: "New legal consultation", createSubtitle: "A confidential, single-use client invitation will be created with this room.", meetingTitle: "Consultation title", meetingPlaceholder: "Client legal consultation",
     clientName: "Client name", clientDefault: "Client", clientLanguage: "Client’s spoken language", english: "English", thai: "Thai",
-    protectionTitle: "60-minute protection.", protectionText: "The invitation and room expire automatically. The client gets video and audio access, never private captions.",
-    cancel: "Cancel", creating: "Creating…", createAndLink: "Create & get link", createLink: "Create client link", createLinkSubtitle: (title: string) => `For “${title}”. Each link admits one client once.`,
-    createLinkButton: "Create link", shareReadyTitle: "Client link is ready", shareReadySubtitle: "Send this private link to your client. It can be used once and expires with the meeting.",
-    readyToShare: "Ready to share", forGuest: "For", expires: "Expires", copied: "Copied ✓", copyLink: "Copy client link", share: "Share…", joinNow: "Join the meeting now",
-    close: "Close", loadError: "Could not load meetings", createError: "Could not create the meeting", linkError: "Could not create the client link",
-    partialError: "The meeting was created, but its client link was not. Use “Client link” on the meeting card to retry.", endError: "Could not end the meeting",
-    endConfirm: (title: string) => `End “${title}” for everyone?`, shareText: (title: string) => `Join ${title}`,
+    protectionTitle: "Confidentiality by design.", protectionText: "The consultation and invitation close automatically after 60 minutes. Clients receive secure video and audio access, but never the legal team’s private captions.",
+    cancel: "Cancel", creating: "Creating…", createAndLink: "Create & get invitation", createLink: "Create client invitation", createLinkSubtitle: (title: string) => `For “${title}”. This confidential link admits one client once.`,
+    createLinkButton: "Create invitation", shareReadyTitle: "Client invitation is ready", shareReadySubtitle: "Send this confidential link to your client. It can be used once and expires with the consultation.",
+    readyToShare: "Ready to send securely", forGuest: "For", expires: "Expires", copied: "Copied ✓", copyLink: "Copy invitation", share: "Share…", joinNow: "Open the consultation now",
+    close: "Close", loadError: "Could not load consultations", createError: "Could not create the consultation", linkError: "Could not create the client invitation",
+    partialError: "The consultation was created, but its client invitation was not. Use “Client invitation” on the consultation card to retry.", endError: "Could not end the consultation",
+    endConfirm: (title: string) => `End the consultation “${title}” for everyone?`, shareText: (title: string) => `Join your private UdonLaw consultation: ${title}`,
   },
   th: {
-    workspace: "พื้นที่ทำงานภายใน", signOut: "ออกจากระบบ", eyebrow: "พื้นที่การประชุม", heading: "การสนทนาของคุณ",
-    intro: "สร้างห้อง คัดลอกลิงก์ส่วนตัวสำหรับลูกค้า และเข้าร่วมเมื่อพร้อม ทุกห้องจะปิดอัตโนมัติหลัง 60 นาที",
-    newMeeting: "สร้างการประชุม", liveNow: "กำลังประชุม", ready: "พร้อม", completed: "เสร็จสิ้น", live: "กำลังประชุม", ended: "สิ้นสุดแล้ว",
-    loading: "กำลังโหลดการประชุม…", emptyTitle: "เริ่มการประชุมแรกของคุณที่นี่", emptyText: "สร้างห้อง แล้วระบบจะสร้างลิงก์เชิญลูกค้าให้โดยอัตโนมัติ",
-    createMeeting: "สร้างการประชุม", clientLink: "ลิงก์ลูกค้า", joinRoom: "เข้าร่วมห้อง", end: "สิ้นสุด", completedTime: "เสร็จสิ้น", limit: "จำกัด 60 นาที", endingNow: "กำลังสิ้นสุด", remaining: "ที่เหลือ",
-    createTitle: "สร้างการประชุม", createSubtitle: "ระบบจะสร้างลิงก์ส่วนตัวแบบใช้ครั้งเดียวสำหรับลูกค้าพร้อมกับห้อง", meetingTitle: "ชื่อการประชุม", meetingPlaceholder: "ปรึกษาโครงการกับลูกค้า",
+    workspace: "ระบบภายในอุดรลอว์", signOut: "ออกจากระบบ", eyebrow: "พื้นที่ปรึกษาด้านกฎหมาย", heading: "การปรึกษากับลูกค้า",
+    intro: "เปิดห้องปรึกษาที่เป็นความลับ ส่งคำเชิญที่ปลอดภัยให้ลูกค้า และพูดคุยพร้อมล่ามภาษาอังกฤษ ↔ ไทยเมื่อจำเป็น",
+    newMeeting: "สร้างการปรึกษา", liveNow: "กำลังปรึกษา", ready: "พร้อม", completed: "ปิดแล้ว", live: "กำลังปรึกษา", ended: "ปิดแล้ว",
+    loading: "กำลังโหลดการปรึกษา…", emptyTitle: "สร้างห้องปรึกษาแรกของคุณ", emptyText: "เปิดห้องที่ปลอดภัย แล้วระบบจะเตรียมคำเชิญส่วนตัวสำหรับลูกค้าโดยอัตโนมัติ",
+    createMeeting: "สร้างการปรึกษา", clientLink: "คำเชิญลูกค้า", joinRoom: "เปิดห้อง", end: "สิ้นสุด", completedTime: "ปิดแล้ว", limit: "จำกัด 60 นาที", endingNow: "กำลังสิ้นสุด", remaining: "ที่เหลือ",
+    createTitle: "การปรึกษากฎหมายใหม่", createSubtitle: "ระบบจะสร้างคำเชิญลูกค้าแบบเป็นความลับและใช้ครั้งเดียวพร้อมกับห้อง", meetingTitle: "ชื่อการปรึกษา", meetingPlaceholder: "การปรึกษากฎหมายกับลูกค้า",
     clientName: "ชื่อลูกค้า", clientDefault: "ลูกค้า", clientLanguage: "ภาษาพูดของลูกค้า", english: "อังกฤษ", thai: "ไทย",
-    protectionTitle: "การป้องกัน 60 นาที", protectionText: "คำเชิญและห้องจะหมดอายุโดยอัตโนมัติ ลูกค้าใช้วิดีโอและเสียงได้ แต่จะไม่เห็นคำบรรยายส่วนตัว",
-    cancel: "ยกเลิก", creating: "กำลังสร้าง…", createAndLink: "สร้างและรับลิงก์", createLink: "สร้างลิงก์ลูกค้า", createLinkSubtitle: (title: string) => `สำหรับ “${title}” แต่ละลิงก์ให้ลูกค้าเข้าร่วมได้หนึ่งคนและใช้ได้ครั้งเดียว`,
-    createLinkButton: "สร้างลิงก์", shareReadyTitle: "ลิงก์ลูกค้าพร้อมแล้ว", shareReadySubtitle: "ส่งลิงก์ส่วนตัวนี้ให้ลูกค้า ลิงก์ใช้ได้ครั้งเดียวและจะหมดอายุพร้อมการประชุม",
-    readyToShare: "พร้อมแชร์", forGuest: "สำหรับ", expires: "หมดอายุ", copied: "คัดลอกแล้ว ✓", copyLink: "คัดลอกลิงก์ลูกค้า", share: "แชร์…", joinNow: "เข้าร่วมการประชุมตอนนี้",
-    close: "ปิด", loadError: "ไม่สามารถโหลดการประชุมได้", createError: "ไม่สามารถสร้างการประชุมได้", linkError: "ไม่สามารถสร้างลิงก์ลูกค้าได้",
-    partialError: "สร้างการประชุมแล้ว แต่ยังสร้างลิงก์ลูกค้าไม่สำเร็จ โปรดกด “ลิงก์ลูกค้า” บนการ์ดการประชุมเพื่อลองอีกครั้ง", endError: "ไม่สามารถสิ้นสุดการประชุมได้",
-    endConfirm: (title: string) => `ต้องการสิ้นสุด “${title}” สำหรับทุกคนหรือไม่`, shareText: (title: string) => `เข้าร่วม ${title}`,
+    protectionTitle: "ออกแบบมาเพื่อรักษาความลับ", protectionText: "การปรึกษาและคำเชิญจะปิดอัตโนมัติหลัง 60 นาที ลูกค้าใช้วิดีโอและเสียงที่ปลอดภัยได้ แต่จะไม่เห็นคำบรรยายส่วนตัวของทีมกฎหมาย",
+    cancel: "ยกเลิก", creating: "กำลังสร้าง…", createAndLink: "สร้างและรับคำเชิญ", createLink: "สร้างคำเชิญลูกค้า", createLinkSubtitle: (title: string) => `สำหรับ “${title}” คำเชิญส่วนตัวนี้ให้ลูกค้าเข้าร่วมได้หนึ่งคนและใช้ได้ครั้งเดียว`,
+    createLinkButton: "สร้างคำเชิญ", shareReadyTitle: "คำเชิญลูกค้าพร้อมแล้ว", shareReadySubtitle: "ส่งลิงก์ที่เป็นความลับนี้ให้ลูกค้า ใช้ได้ครั้งเดียวและจะหมดอายุพร้อมการปรึกษา",
+    readyToShare: "พร้อมส่งอย่างปลอดภัย", forGuest: "สำหรับ", expires: "หมดอายุ", copied: "คัดลอกแล้ว ✓", copyLink: "คัดลอกคำเชิญ", share: "แชร์…", joinNow: "เปิดการปรึกษาตอนนี้",
+    close: "ปิด", loadError: "ไม่สามารถโหลดการปรึกษาได้", createError: "ไม่สามารถสร้างการปรึกษาได้", linkError: "ไม่สามารถสร้างคำเชิญลูกค้าได้",
+    partialError: "สร้างการปรึกษาแล้ว แต่ยังสร้างคำเชิญลูกค้าไม่สำเร็จ โปรดกด “คำเชิญลูกค้า” บนการ์ดเพื่อลองอีกครั้ง", endError: "ไม่สามารถสิ้นสุดการปรึกษาได้",
+    endConfirm: (title: string) => `ต้องการสิ้นสุดการปรึกษา “${title}” สำหรับทุกคนหรือไม่`, shareText: (title: string) => `เข้าร่วมการปรึกษาส่วนตัวกับอุดรลอว์: ${title}`,
   },
 } as const;
 
@@ -239,7 +239,7 @@ export default function Dashboard() {
   return (
     <main className="app-shell">
       <div className="mx-auto w-full max-w-6xl">
-        <header className="flex items-center justify-between gap-3">
+        <header className="law-office-rule flex items-center justify-between gap-3 border-b pb-5">
           <Brand href="/dashboard" />
           <div className="flex items-center gap-2">
             <span className="hidden rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-slate-400 md:block">{copy.workspace}</span>
@@ -337,8 +337,8 @@ function LanguageField({ value, onChange, language }: { value: "en" | "th"; onCh
   const copy = COPY[language];
   return (
     <div><label className="field-label">{copy.clientLanguage}</label><div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-950/50 p-1.5">
-      <button type="button" onClick={() => onChange("en")} className={`rounded-lg px-4 py-2.5 text-sm font-medium transition ${value === "en" ? "bg-white/10 text-white shadow" : "text-slate-500 hover:text-slate-300"}`}>{copy.english}</button>
-      <button type="button" onClick={() => onChange("th")} className={`rounded-lg px-4 py-2.5 text-sm font-medium transition ${value === "th" ? "bg-white/10 text-white shadow" : "text-slate-500 hover:text-slate-300"}`}>{copy.thai}</button>
+      <button type="button" onClick={() => onChange("en")} className={`rounded-lg px-4 py-2.5 text-sm font-medium transition ${value === "en" ? "language-toggle-active shadow" : "text-slate-500 hover:text-slate-300"}`}>{copy.english}</button>
+      <button type="button" onClick={() => onChange("th")} className={`rounded-lg px-4 py-2.5 text-sm font-medium transition ${value === "th" ? "language-toggle-active shadow" : "text-slate-500 hover:text-slate-300"}`}>{copy.thai}</button>
     </div></div>
   );
 }

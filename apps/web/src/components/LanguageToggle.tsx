@@ -13,7 +13,7 @@ export function LanguageToggle({
 }) {
   return (
     <div
-      className={`inline-flex items-center rounded-xl border border-white/10 bg-slate-950/55 p-1 ${compact ? "text-[11px]" : "text-xs"}`}
+      className={`language-toggle inline-flex items-center rounded-lg border p-1 ${compact ? "text-[11px]" : "text-xs"}`}
       role="group"
       aria-label={language === "th" ? "เลือกภาษา" : "Choose language"}
     >
@@ -23,8 +23,8 @@ export function LanguageToggle({
           type="button"
           onClick={() => onChange(option)}
           aria-pressed={language === option}
-          className={`rounded-lg font-semibold transition ${compact ? "px-2 py-1.5" : "px-3 py-2"} ${
-            language === option ? "bg-white/10 text-white shadow-sm" : "text-slate-500 hover:text-slate-300"
+          className={`rounded-md font-semibold transition ${compact ? "px-2 py-1.5" : "px-3 py-2"} ${
+            language === option ? "language-toggle-active shadow-sm" : "language-toggle-inactive"
           }`}
         >
           {option === "en" ? "EN" : "ไทย"}

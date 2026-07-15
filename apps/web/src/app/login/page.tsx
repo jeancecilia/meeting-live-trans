@@ -9,39 +9,39 @@ import { languageFromAccessToken, saveUiLanguage, useUiLanguage } from "@/lib/ui
 
 const COPY = {
   en: {
-    workspace: "Internal workspace",
-    headline: <>One conversation.<br />Two languages.</>,
-    intro: "Your English and Thai team accounts receive private translated captions. Client participants never receive caption data.",
-    benefits: ["Live translated captions for internal users", "One-click, expiring client invitation links", "No recording and no stored transcript by default"],
-    welcome: "Welcome back",
-    signIn: "Sign in",
-    accountHelp: "Use your English or Thai internal account.",
+    workspace: "UdonLaw internal office",
+    headline: <>Confidential counsel.<br />Clear communication.</>,
+    intro: "A private consultation workspace for UdonLaw’s English- and Thai-speaking legal team. Client conversations remain protected and professional.",
+    benefits: ["Private interpretation for authorized legal staff", "Secure, expiring links for client consultations", "No call recording and no stored transcript by default"],
+    welcome: "Legal team access",
+    signIn: "Sign in to UdonLaw",
+    accountHelp: "Use your authorized English or Thai team account.",
     email: "Email address",
     emailPlaceholder: "name@company.com",
     password: "Password",
-    internalOnly: "Internal accounts only",
+    internalOnly: "Authorized staff only",
     passwordPlaceholder: "Enter your password",
     signingIn: "Signing in…",
     continue: "Continue",
-    clientHelp: "Clients do not sign in here. They join using the private invitation link you share with them.",
+    clientHelp: "Clients join through the confidential consultation link sent by their lawyer. No client account is required.",
     loginError: "We could not sign you in with those details.",
   },
   th: {
-    workspace: "พื้นที่ทำงานสำหรับทีม",
-    headline: <>หนึ่งบทสนทนา<br />สองภาษา</>,
-    intro: "บัญชีทีมภาษาอังกฤษและภาษาไทยจะได้รับคำบรรยายแปลแบบส่วนตัว ส่วนผู้เข้าร่วมที่เป็นลูกค้าจะไม่ได้รับข้อมูลคำบรรยาย",
-    benefits: ["คำบรรยายแปลสดสำหรับผู้ใช้ภายใน", "ลิงก์เชิญลูกค้าที่สร้างได้ในคลิกเดียวและหมดอายุอัตโนมัติ", "ไม่มีการบันทึกเสียงและไม่จัดเก็บบทสนทนาเป็นค่าเริ่มต้น"],
-    welcome: "ยินดีต้อนรับกลับ",
-    signIn: "เข้าสู่ระบบ",
-    accountHelp: "ใช้บัญชีภายในภาษาอังกฤษหรือภาษาไทยของคุณ",
+    workspace: "ระบบภายในอุดรลอว์",
+    headline: <>คำปรึกษาที่เป็นความลับ<br />สื่อสารได้อย่างชัดเจน</>,
+    intro: "พื้นที่ปรึกษาส่วนตัวสำหรับทีมกฎหมายภาษาอังกฤษและภาษาไทยของอุดรลอว์ การสนทนากับลูกค้ายังคงได้รับการคุ้มครองและเป็นมืออาชีพ",
+    benefits: ["ล่ามส่วนตัวสำหรับเจ้าหน้าที่กฎหมายที่ได้รับอนุญาต", "ลิงก์ปรึกษาลูกค้าที่ปลอดภัยและหมดอายุอัตโนมัติ", "ไม่บันทึกการโทรและไม่จัดเก็บบทสนทนาเป็นค่าเริ่มต้น"],
+    welcome: "สำหรับทีมกฎหมาย",
+    signIn: "เข้าสู่ระบบอุดรลอว์",
+    accountHelp: "ใช้บัญชีทีมภาษาอังกฤษหรือภาษาไทยที่ได้รับอนุญาต",
     email: "อีเมล",
     emailPlaceholder: "name@company.com",
     password: "รหัสผ่าน",
-    internalOnly: "เฉพาะบัญชีภายใน",
+    internalOnly: "เฉพาะเจ้าหน้าที่ที่ได้รับอนุญาต",
     passwordPlaceholder: "กรอกรหัสผ่าน",
     signingIn: "กำลังเข้าสู่ระบบ…",
     continue: "ดำเนินการต่อ",
-    clientHelp: "ลูกค้าไม่ต้องเข้าสู่ระบบที่นี่ แต่เข้าร่วมผ่านลิงก์เชิญส่วนตัวที่คุณส่งให้",
+    clientHelp: "ลูกค้าเข้าร่วมผ่านลิงก์ปรึกษาส่วนตัวที่ทนายความส่งให้ โดยไม่ต้องมีบัญชีลูกค้า",
     loginError: "ไม่สามารถเข้าสู่ระบบด้วยข้อมูลนี้ได้ โปรดตรวจสอบอีกครั้ง",
   },
 } as const;
@@ -81,7 +81,7 @@ export default function LoginPage() {
 
   return (
     <main className="app-shell flex min-h-screen flex-col">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3"><Brand /><LanguageToggle language={language} onChange={setLanguage} /></header>
+      <header className="law-office-rule mx-auto flex w-full max-w-6xl items-center justify-between gap-3 border-b pb-5"><Brand /><LanguageToggle language={language} onChange={setLanguage} /></header>
       <div className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 py-12 lg:grid-cols-2">
         <section className="hidden max-w-lg lg:block">
           <p className="eyebrow mb-4">{copy.workspace}</p>

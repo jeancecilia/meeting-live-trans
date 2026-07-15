@@ -19,22 +19,22 @@ const COPY = {
   en: {
     invalid: "This invitation link is invalid, expired, or has already been used.", unavailable: "This link is not available",
     opening: "Opening your invitation", checking: "Checking the secure meeting link…", expired: "This invitation has expired", freshLink: "Ask the meeting host to create a fresh client link.",
-    privateInvite: "Private invitation", invited: "You’re invited to", browser: "Join directly in your browser. You do not need an account or any software installation.",
+    privateInvite: "Confidential legal invitation", invited: "You’re invited to a consultation", browser: "Meet securely with the UdonLaw legal team in your browser. No account or software installation is required.",
     yourLanguage: "Your language", english: "English", thai: "Thai", closes: "Room closes automatically after 60 minutes", permissions: "Your browser will ask for camera and microphone access",
-    ready: "Ready to join?", checkName: "Check your name before entering", displayName: "Your display name", namePlaceholder: "Your name",
-    consent: "I understand that this meeting uses automated speech transcription and translation. Audio is processed in real time and is not recorded by this application.",
-    joinError: "The invitation could not be used.", failed: "Failed to join. Please request a new link.", joining: "Joining securely…", join: "Join meeting",
-    privacy: "Private translated captions are visible only to authorized internal participants.",
+    ready: "Ready for your consultation?", checkName: "Confirm your name before entering the private room", displayName: "Your display name", namePlaceholder: "Your name",
+    consent: "I understand that this legal consultation uses automated speech transcription and translation. Audio is processed in real time and is not recorded by this application.",
+    joinError: "The invitation could not be used.", failed: "Failed to join. Please request a new link.", joining: "Entering securely…", join: "Enter consultation",
+    privacy: "Translated captions are confidential and visible only to authorized UdonLaw team members.",
   },
   th: {
     invalid: "ลิงก์เชิญนี้ไม่ถูกต้อง หมดอายุ หรือถูกใช้งานแล้ว", unavailable: "ไม่สามารถใช้ลิงก์นี้ได้",
     opening: "กำลังเปิดคำเชิญ", checking: "กำลังตรวจสอบลิงก์การประชุมที่ปลอดภัย…", expired: "คำเชิญนี้หมดอายุแล้ว", freshLink: "โปรดขอให้เจ้าของการประชุมสร้างลิงก์ลูกค้าใหม่",
-    privateInvite: "คำเชิญส่วนตัว", invited: "คุณได้รับเชิญให้เข้าร่วม", browser: "เข้าร่วมได้โดยตรงผ่านเบราว์เซอร์ ไม่ต้องมีบัญชีหรือติดตั้งซอฟต์แวร์",
+    privateInvite: "คำเชิญปรึกษากฎหมายที่เป็นความลับ", invited: "คุณได้รับเชิญเข้ารับการปรึกษา", browser: "พูดคุยกับทีมกฎหมายอุดรลอว์อย่างปลอดภัยผ่านเบราว์เซอร์ โดยไม่ต้องมีบัญชีหรือติดตั้งซอฟต์แวร์",
     yourLanguage: "ภาษาของคุณ", english: "อังกฤษ", thai: "ไทย", closes: "ห้องจะปิดอัตโนมัติหลัง 60 นาที", permissions: "เบราว์เซอร์จะขอสิทธิ์ใช้กล้องและไมโครโฟน",
-    ready: "พร้อมเข้าร่วมหรือยัง", checkName: "ตรวจสอบชื่อของคุณก่อนเข้าห้อง", displayName: "ชื่อที่แสดง", namePlaceholder: "ชื่อของคุณ",
-    consent: "ฉันเข้าใจว่าการประชุมนี้ใช้ระบบถอดเสียงและแปลภาษาอัตโนมัติ เสียงจะถูกประมวลผลแบบเรียลไทม์และแอปพลิเคชันนี้จะไม่บันทึกเสียง",
-    joinError: "ไม่สามารถใช้คำเชิญนี้ได้", failed: "ไม่สามารถเข้าร่วมได้ โปรดขอลิงก์ใหม่", joining: "กำลังเข้าร่วมอย่างปลอดภัย…", join: "เข้าร่วมการประชุม",
-    privacy: "คำบรรยายแปลส่วนตัวจะแสดงเฉพาะผู้เข้าร่วมภายในที่ได้รับอนุญาต",
+    ready: "พร้อมรับการปรึกษาหรือยัง", checkName: "ยืนยันชื่อของคุณก่อนเข้าห้องส่วนตัว", displayName: "ชื่อที่แสดง", namePlaceholder: "ชื่อของคุณ",
+    consent: "ฉันเข้าใจว่าการปรึกษากฎหมายนี้ใช้ระบบถอดเสียงและแปลภาษาอัตโนมัติ เสียงจะถูกประมวลผลแบบเรียลไทม์และแอปพลิเคชันนี้จะไม่บันทึกเสียง",
+    joinError: "ไม่สามารถใช้คำเชิญนี้ได้", failed: "ไม่สามารถเข้าร่วมได้ โปรดขอลิงก์ใหม่", joining: "กำลังเข้าร่วมอย่างปลอดภัย…", join: "เข้าร่วมการปรึกษา",
+    privacy: "คำบรรยายแปลเป็นความลับและจะแสดงเฉพาะทีมอุดรลอว์ที่ได้รับอนุญาต",
   },
 } as const;
 
@@ -99,7 +99,7 @@ export default function JoinPage() {
 
   return (
     <main className="app-shell flex min-h-screen flex-col">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3"><Brand /><LanguageToggle language={language} onChange={setLanguage} /></header>
+      <header className="law-office-rule mx-auto flex w-full max-w-6xl items-center justify-between gap-3 border-b pb-5"><Brand /><LanguageToggle language={language} onChange={setLanguage} /></header>
       <div className="mx-auto grid w-full max-w-5xl flex-1 items-center gap-10 py-10 lg:grid-cols-[.9fr_1.1fr]">
         <section className="animate-lift-in">
           <p className="eyebrow mb-4">{copy.privateInvite}</p>
@@ -114,7 +114,7 @@ export default function JoinPage() {
 
         <section className="glass-panel animate-lift-in rounded-[1.75rem] p-6 [animation-delay:100ms] sm:p-8">
           <div className="mb-7 flex items-center gap-4">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-cyan-400/20 to-violet-500/20 text-lg font-semibold text-cyan-200">{displayName.trim().charAt(0).toUpperCase() || "C"}</div>
+            <div className="grid h-12 w-12 place-items-center rounded-xl bg-gradient-to-br from-[#aa7d61]/20 to-[#293047]/15 text-lg font-semibold text-[#8e654d]">{displayName.trim().charAt(0).toUpperCase() || "C"}</div>
             <div><h2 className="text-xl font-semibold text-white">{copy.ready}</h2><p className="mt-1 text-xs text-slate-500">{copy.checkName}</p></div>
           </div>
 
@@ -142,6 +142,6 @@ export default function JoinPage() {
 
 function InvitationState({ title, message, language, onLanguageChange, loading = false }: { title: string; message: string; language: UiLanguage; onLanguageChange: (language: UiLanguage) => void; loading?: boolean }) {
   return (
-    <main className="app-shell flex min-h-screen flex-col"><header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3"><Brand /><LanguageToggle language={language} onChange={onLanguageChange} /></header><div className="grid flex-1 place-items-center"><div className="glass-panel max-w-md rounded-[1.75rem] p-9 text-center">{loading ? <span className="mx-auto block h-8 w-8 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" /> : <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-amber-400/10 text-xl text-amber-300">!</span>}<h1 className="mt-5 text-2xl font-semibold text-white">{title}</h1><p className="mt-3 text-sm leading-6 text-slate-400">{message}</p></div></div></main>
+    <main className="app-shell flex min-h-screen flex-col"><header className="law-office-rule mx-auto flex w-full max-w-6xl items-center justify-between gap-3 border-b pb-5"><Brand /><LanguageToggle language={language} onChange={onLanguageChange} /></header><div className="grid flex-1 place-items-center"><div className="glass-panel max-w-md rounded-[1.75rem] p-9 text-center">{loading ? <span className="mx-auto block h-8 w-8 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" /> : <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-amber-400/10 text-xl text-amber-300">!</span>}<h1 className="mt-5 text-2xl font-semibold text-white">{title}</h1><p className="mt-3 text-sm leading-6 text-slate-400">{message}</p></div></div></main>
   );
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch, getApiUrl } from "@/lib/api";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { LawMark } from "@/components/Brand";
 import { type UiLanguage, useUiLanguage } from "@/lib/ui-language";
 import {
   LiveKitRoom,
@@ -41,26 +42,26 @@ interface SystemLog {
 
 const COPY = {
   en: {
-    privateMeeting: "Private meeting", invalidClient: "This client session is no longer valid.", connectError: "Could not connect to the meeting.",
-    unable: "Unable to join", returnHome: "Return home", back: "Back to meetings", preparing: "Preparing your room", preparingMessage: "Connecting secure video, audio, and translation…",
-    leaveRoom: "Leave room", liveSecure: "Live · Secure", endsIn: "Ends in", ending: "Ending…", captions: "Captions", endMeeting: "End meeting", end: "End",
-    endConfirm: "End this meeting for everyone?", endError: "The meeting could not be ended.", translating: "Translating",
-    privateCaptions: "Private captions", captionPrivacy: "Only authorized internal users receive these.", translationReady: "Translation ready", connecting: "Connecting", reconnecting: "Reconnecting", unavailable: "Unavailable",
+    privateMeeting: "Private legal consultation", invalidClient: "This confidential client session is no longer valid.", connectError: "Could not connect to the consultation.",
+    unable: "Unable to join", returnHome: "Return home", back: "Back to consultations", preparing: "Preparing your consultation room", preparingMessage: "Connecting confidential video, audio, and legal interpretation…",
+    leaveRoom: "Leave consultation", liveSecure: "Live · Confidential", endsIn: "Closes in", ending: "Closing…", captions: "Interpretation", endMeeting: "End consultation", end: "End",
+    endConfirm: "End this legal consultation for everyone?", endError: "The consultation could not be ended.", translating: "Interpreting",
+    privateCaptions: "Legal team captions", captionPrivacy: "Confidential captions for authorized UdonLaw staff only.", translationReady: "Interpretation ready", connecting: "Connecting", reconnecting: "Reconnecting", unavailable: "Unavailable",
     on: "On", off: "Off", captionSize: "Caption size", small: "Small", medium: "Medium", large: "Large", recentActivity: "Recent service activity",
-    translationUnavailable: "Translation is temporarily unavailable. The video call will continue.", serviceUpdate: "Translation service status updated.", close: "Close",
+    translationUnavailable: "Interpretation is temporarily unavailable. The confidential video consultation will continue.", serviceUpdate: "Interpretation service status updated.", close: "Close",
     mute: "Mute", unmute: "Unmute", cameraOff: "Turn camera off", cameraOn: "Turn camera on", shareScreen: "Share screen", stopSharing: "Stop sharing", leave: "Leave",
-    mediaError: "The browser could not change that camera, microphone, or screen-sharing setting.", meetingControls: "Meeting controls",
+    mediaError: "The browser could not change that camera, microphone, or screen-sharing setting.", meetingControls: "Consultation controls",
   },
   th: {
-    privateMeeting: "การประชุมส่วนตัว", invalidClient: "เซสชันลูกค้านี้ไม่สามารถใช้งานได้แล้ว", connectError: "ไม่สามารถเชื่อมต่อกับการประชุมได้",
-    unable: "ไม่สามารถเข้าร่วมได้", returnHome: "กลับหน้าหลัก", back: "กลับไปยังการประชุม", preparing: "กำลังเตรียมห้อง", preparingMessage: "กำลังเชื่อมต่อวิดีโอ เสียง และระบบแปลภาษาที่ปลอดภัย…",
-    leaveRoom: "ออกจากห้อง", liveSecure: "กำลังประชุม · ปลอดภัย", endsIn: "สิ้นสุดใน", ending: "กำลังสิ้นสุด…", captions: "คำบรรยาย", endMeeting: "สิ้นสุดการประชุม", end: "สิ้นสุด",
-    endConfirm: "ต้องการสิ้นสุดการประชุมนี้สำหรับทุกคนหรือไม่", endError: "ไม่สามารถสิ้นสุดการประชุมได้", translating: "กำลังแปล",
-    privateCaptions: "คำบรรยายส่วนตัว", captionPrivacy: "เฉพาะผู้ใช้ภายในที่ได้รับอนุญาตเท่านั้นที่จะได้รับคำบรรยาย", translationReady: "พร้อมแปลภาษา", connecting: "กำลังเชื่อมต่อ", reconnecting: "กำลังเชื่อมต่อใหม่", unavailable: "ไม่พร้อมใช้งาน",
+    privateMeeting: "การปรึกษากฎหมายส่วนตัว", invalidClient: "เซสชันลูกค้าที่เป็นความลับนี้ไม่สามารถใช้งานได้แล้ว", connectError: "ไม่สามารถเชื่อมต่อกับการปรึกษาได้",
+    unable: "ไม่สามารถเข้าร่วมได้", returnHome: "กลับหน้าหลัก", back: "กลับไปยังการปรึกษา", preparing: "กำลังเตรียมห้องปรึกษา", preparingMessage: "กำลังเชื่อมต่อวิดีโอ เสียง และล่ามทางกฎหมายแบบเป็นความลับ…",
+    leaveRoom: "ออกจากการปรึกษา", liveSecure: "กำลังปรึกษา · เป็นความลับ", endsIn: "ปิดใน", ending: "กำลังปิด…", captions: "ล่าม", endMeeting: "สิ้นสุดการปรึกษา", end: "สิ้นสุด",
+    endConfirm: "ต้องการสิ้นสุดการปรึกษากฎหมายนี้สำหรับทุกคนหรือไม่", endError: "ไม่สามารถสิ้นสุดการปรึกษาได้", translating: "กำลังแปล",
+    privateCaptions: "คำบรรยายสำหรับทีมกฎหมาย", captionPrivacy: "คำบรรยายที่เป็นความลับสำหรับทีมอุดรลอว์ที่ได้รับอนุญาตเท่านั้น", translationReady: "ล่ามพร้อมใช้งาน", connecting: "กำลังเชื่อมต่อ", reconnecting: "กำลังเชื่อมต่อใหม่", unavailable: "ไม่พร้อมใช้งาน",
     on: "เปิด", off: "ปิด", captionSize: "ขนาดคำบรรยาย", small: "เล็ก", medium: "กลาง", large: "ใหญ่", recentActivity: "กิจกรรมบริการล่าสุด",
-    translationUnavailable: "ระบบแปลภาษาไม่พร้อมใช้งานชั่วคราว แต่วิดีโอคอลจะทำงานต่อไป", serviceUpdate: "อัปเดตสถานะบริการแปลภาษาแล้ว", close: "ปิด",
+    translationUnavailable: "ล่ามไม่พร้อมใช้งานชั่วคราว แต่การปรึกษาผ่านวิดีโอแบบเป็นความลับจะทำงานต่อไป", serviceUpdate: "อัปเดตสถานะบริการล่ามแล้ว", close: "ปิด",
     mute: "ปิดไมค์", unmute: "เปิดไมค์", cameraOff: "ปิดกล้อง", cameraOn: "เปิดกล้อง", shareScreen: "แชร์หน้าจอ", stopSharing: "หยุดแชร์", leave: "ออกจากห้อง",
-    mediaError: "เบราว์เซอร์ไม่สามารถเปลี่ยนการตั้งค่ากล้อง ไมโครโฟน หรือการแชร์หน้าจอได้", meetingControls: "ตัวควบคุมการประชุม",
+    mediaError: "เบราว์เซอร์ไม่สามารถเปลี่ยนการตั้งค่ากล้อง ไมโครโฟน หรือการแชร์หน้าจอได้", meetingControls: "ตัวควบคุมการปรึกษา",
   },
 } as const;
 
@@ -263,19 +264,20 @@ export default function MeetingRoom() {
   }
 
   return (
-    <main className="meeting-shell min-h-screen bg-[#070b14]">
+    <main className="meeting-shell min-h-screen bg-[#171d2e]">
       <LiveKitRoom token={token} serverUrl={wsUrl} connect video audio data-lk-theme="default" style={{ height: "100vh" }} onDisconnected={handleDisconnected}>
         <div className="relative flex h-full flex-col overflow-hidden">
           <header className="pointer-events-none fixed inset-x-0 top-0 z-40 flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/75 px-4 py-3 backdrop-blur-xl sm:px-6">
             <div className="pointer-events-auto flex min-w-0 items-center gap-3">
               <button onClick={handleDisconnected} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition hover:text-white" aria-label={copy.leaveRoom}>←</button>
+              <LawMark className="hidden h-8 w-8 sm:grid" />
               <div className="min-w-0"><h1 className="truncate text-sm font-semibold text-white sm:text-base">{meeting?.title || copy.privateMeeting}</h1><div className="mt-0.5 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.7)]" /> {copy.liveSecure}</div></div>
             </div>
 
             <div className="pointer-events-auto flex items-center gap-2">
               <div className={`hidden items-center gap-2 rounded-xl border px-3 py-2 text-xs md:flex ${deadlineReached ? "border-amber-400/20 bg-amber-400/10 text-amber-200" : "border-white/10 bg-white/5 text-slate-300"}`}><span className="text-slate-500">{copy.endsIn}</span><span className="font-mono font-semibold tabular-nums">{deadlineReached ? copy.ending : countdown}</span></div>
               <LanguageToggle language={language} onChange={setLanguage} compact />
-              {!isGuest && <button onClick={() => setSettingsOpen((open) => !open)} className={`secondary-button !px-3 !py-2 ${settingsOpen ? "!border-cyan-400/30 !text-cyan-200" : ""}`}><span className="rounded bg-white/10 px-1 text-[10px]">CC</span><span className="hidden sm:inline">{copy.captions}</span></button>}
+              {!isGuest && <button onClick={() => setSettingsOpen((open) => !open)} className={`secondary-button !px-3 !py-2 ${settingsOpen ? "!border-[#b2866b]/40 !text-[#e4c4af]" : ""}`}><span className="rounded bg-white/10 px-1 text-[10px]">CC</span><span className="hidden sm:inline">{copy.captions}</span></button>}
               {role === "host" && <button onClick={endMeeting} disabled={ending} className="danger-button !px-3 !py-2"><span className="hidden sm:inline">{ending ? copy.ending : copy.endMeeting}</span><span className="sm:hidden">{copy.end}</span></button>}
             </div>
           </header>
@@ -348,7 +350,7 @@ function LocalizedControlBar({ language }: { language: UiLanguage }) {
       {mediaError && <div role="alert" className="absolute bottom-full mb-3 rounded-xl border border-rose-400/25 bg-rose-950/95 px-4 py-2 text-xs text-rose-100 shadow-xl">{mediaError}</div>}
       <div className="flex items-center justify-center gap-2">
         {controls.map((control) => (
-          <button key={control.key} type="button" onClick={() => changeMedia(control.action)} title={control.label} aria-label={control.label} className={`meeting-control-button ${!control.active && control.key !== "screen" ? "meeting-control-button-off" : ""} ${control.active && control.key === "screen" ? "!border-cyan-400/30 !bg-cyan-400/10 !text-cyan-200" : ""}`}>
+          <button key={control.key} type="button" onClick={() => changeMedia(control.action)} title={control.label} aria-label={control.label} className={`meeting-control-button ${!control.active && control.key !== "screen" ? "meeting-control-button-off" : ""} ${control.active && control.key === "screen" ? "!border-[#b2866b]/40 !bg-[#b2866b]/10 !text-[#e4c4af]" : ""}`}>
             <ControlIcon kind={control.key} off={!control.active && control.key !== "screen"} />
             <span className="hidden text-xs font-medium sm:inline">{control.label}</span>
           </button>
@@ -370,5 +372,5 @@ function ControlIcon({ kind, off = false }: { kind: "microphone" | "camera" | "s
 }
 
 function MeetingState({ title, message, language, onLanguageChange, loading = false, action, actionLabel }: { title: string; message: string; language: UiLanguage; onLanguageChange: (language: UiLanguage) => void; loading?: boolean; action?: () => void; actionLabel?: string }) {
-  return <main className="relative grid min-h-screen place-items-center p-6"><div className="absolute right-5 top-5"><LanguageToggle language={language} onChange={onLanguageChange} /></div><div className="glass-panel max-w-md rounded-[1.75rem] p-9 text-center">{loading ? <span className="mx-auto block h-9 w-9 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" /> : <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-rose-400/10 text-xl text-rose-300">!</span>}<h1 className="mt-5 text-2xl font-semibold text-white">{title}</h1><p className="mt-3 text-sm leading-6 text-slate-400">{message}</p>{action && <button onClick={action} className="secondary-button mt-6">{actionLabel}</button>}</div></main>;
+  return <main className="app-shell relative grid min-h-screen place-items-center p-6"><div className="absolute right-5 top-5"><LanguageToggle language={language} onChange={onLanguageChange} /></div><div className="glass-panel max-w-md rounded-[1.75rem] p-9 text-center">{loading ? <span className="mx-auto block h-9 w-9 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-300" /> : <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-rose-400/10 text-xl text-rose-300">!</span>}<h1 className="mt-5 text-2xl font-semibold text-white">{title}</h1><p className="mt-3 text-sm leading-6 text-slate-400">{message}</p>{action && <button onClick={action} className="secondary-button mt-6">{actionLabel}</button>}</div></main>;
 }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 export type UiLanguage = "en" | "th";
 
 const STORAGE_KEY = "ui_language";
-const CHANGE_EVENT = "lumameet-language-change";
+const CHANGE_EVENT = "udonlaw-language-change";
 
 function isUiLanguage(value: string | null): value is UiLanguage {
   return value === "en" || value === "th";
