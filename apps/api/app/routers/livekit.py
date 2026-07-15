@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import require_internal_role
 from app.config import settings
 from app.database import get_db
+from app.meeting_lifecycle import meeting_is_expired
 from app.models.meeting import Meeting
 from app.models.meeting_participant import MeetingParticipant
 from app.models.user import User
@@ -38,7 +39,7 @@ class GuestTokenRequest(BaseModel):
 
 
 def _create_guest_session_token(meeting_id: str, guest_identity: str, spoken_language: str, invite_id: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=30)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.meeting_max_duration_minutes)
     payload = {
         "sub": guest_identity, "meeting_id": meeting_id, "spoken_language": spoken_language,
         "invite_id": invite_id, "role": "guest", "type": "guest_session",
@@ -78,7 +79,7 @@ async def get_internal_token(
     meeting = (await db.execute(select(Meeting).where(Meeting.id == meeting_id))).scalar_one_or_none()
     if not meeting:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Meeting not found")
-    if meeting.status == "ended":
+    if meeting.status == "ended" or meeting_is_expired(meeting):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meeting has ended")
 
     identity = f"internal_{user.id.hex[:12]}"
@@ -132,7 +133,7 @@ async def get_guest_token(
     meeting = (await db.execute(select(Meeting).where(Meeting.id == meeting_id))).scalar_one_or_none()
     if not meeting:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Meeting not found")
-    if meeting.status == "ended":
+    if meeting.status == "ended" or meeting_is_expired(meeting):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meeting has ended")
 
     identity = session["sub"]

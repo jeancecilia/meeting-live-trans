@@ -59,6 +59,28 @@ def test_websocket_protocol_log_shape_is_also_redacted() -> None:
     assert "token=<redacted>" in str(record.args)
 
 
+def test_invitation_token_is_redacted_from_access_logs() -> None:
+    record = logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg='%s - "%s %s HTTP/%s" %d',
+        args=(
+            "127.0.0.1:1234",
+            "GET",
+            "/api/public/invites/private-client-token",
+            "1.1",
+            200,
+        ),
+        exc_info=None,
+    )
+
+    assert _AccessTokenRedactionFilter().filter(record)
+    assert "private-client-token" not in str(record.args)
+    assert "/api/public/invites/<redacted>" in str(record.args)
+
+
 
 class TestInviteTokenSecurity:
     def test_token_hash_is_sha256(self):

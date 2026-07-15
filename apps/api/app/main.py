@@ -6,21 +6,28 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.meeting_lifecycle import livekit_http_url, meeting_expiry_task
 from app.routers import active_rooms, auth, captions, invites, livekit, meetings, webhooks
 from app.routers.captions import broadcast_global_system_event
 
 
 class _AccessTokenRedactionFilter(logging.Filter):
-    """Keep WebSocket access tokens out of Uvicorn access-log paths."""
+    """Keep access and invitation tokens out of Uvicorn access-log paths."""
 
     _token_query = re.compile(r"([?&]token=)[^&\s]+")
+    _invite_path = re.compile(r"(/api/public/invites/)[^/?\s]+")
+
+    @classmethod
+    def _redact(cls, value: str) -> str:
+        value = cls._token_query.sub(r"\1<redacted>", value)
+        return cls._invite_path.sub(r"\1<redacted>", value)
 
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.msg, str):
-            record.msg = self._token_query.sub(r"\1<redacted>", record.msg)
+            record.msg = self._redact(record.msg)
         if isinstance(record.args, tuple):
             record.args = tuple(
-                self._token_query.sub(r"\1<redacted>", value)
+                self._redact(value)
                 if isinstance(value, str)
                 else value
                 for value in record.args
@@ -52,9 +59,16 @@ async def health_monitor_task():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(health_monitor_task())
-    yield
-    task.cancel()
+    tasks = [
+        asyncio.create_task(health_monitor_task(), name="health-monitor"),
+        asyncio.create_task(meeting_expiry_task(), name="meeting-expiry"),
+    ]
+    try:
+        yield
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 app = FastAPI(
     title="Meeting Live Trans API",
@@ -119,9 +133,7 @@ async def health_livekit():
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(
-                f"http://{settings.livekit_host}:{settings.livekit_port}/"
-            )
+            resp = await client.get(f"{livekit_http_url()}/")
         return {"status": "ok", "livekit": "reachable" if resp.status_code < 500 else "degraded"}
     except Exception as e:
         return {"status": "error", "livekit": str(e)}

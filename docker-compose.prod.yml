@@ -43,8 +43,13 @@ services:
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
       - LIVEKIT_WS_URL=wss://meet-npvekn8u.livekit.cloud
       - LIVEKIT_PUBLIC_WS_URL=wss://meet-npvekn8u.livekit.cloud
+      - PUBLIC_WEB_URL=https://meet.109.123.230.159.nip.io
+      - MEETING_MAX_DURATION_MINUTES=60
+      - MEETING_EXPIRY_SWEEP_SECONDS=15
       - CAPTION_WORKER_SERVICE_TOKEN=${CAPTION_WORKER_SERVICE_TOKEN:-change-me-worker-service-token}
       - CORS_ORIGINS=https://meet.109.123.230.159.nip.io
+      - SEED_ENGLISH_EMAIL=${SEED_ENGLISH_EMAIL:-english@meetingtest.com}
+      - SEED_THAI_EMAIL=${SEED_THAI_EMAIL:-thai@meetingtest.com}
       - SEED_ENGLISH_PASSWORD=${SEED_ENGLISH_PASSWORD}
       - SEED_THAI_PASSWORD=${SEED_THAI_PASSWORD}
     depends_on:

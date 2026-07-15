@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import async_session
+from app.meeting_lifecycle import meeting_is_expired
 from app.models.meeting import Meeting
 
 router = APIRouter(tags=["internal"])
@@ -25,7 +26,10 @@ async def list_active_rooms(request: Request) -> list[dict]:
         result = await db.execute(
             select(Meeting).where(Meeting.status.in_(["created", "active"]))
         )
-        meetings = result.scalars().all()
+        meetings = [
+            meeting for meeting in result.scalars().all()
+            if not meeting_is_expired(meeting)
+        ]
 
     return [
         {"id": str(m.id), "room_name": m.room_name, "status": m.status}

@@ -4,27 +4,72 @@
 
 @layer base {
   :root {
-    --color-background: #0f172a;
-    --color-surface: #1e293b;
-    --color-text: #f8fafc;
-    --color-text-muted: #94a3b8;
-    --color-border: #334155;
-    --color-caption-bg: rgba(15, 23, 42, 0.85);
+    color-scheme: dark;
+    --ink: #f7f9fc;
+    --muted: #8d9ab0;
+    --line: rgba(148, 163, 184, 0.14);
   }
 
-  * {
-    box-sizing: border-box;
+  * { box-sizing: border-box; }
+  html { background: #070b14; }
+  body {
+    min-height: 100vh;
+    margin: 0;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at 12% -10%, rgba(34, 211, 238, 0.14), transparent 34rem),
+      radial-gradient(circle at 92% 12%, rgba(139, 92, 246, 0.12), transparent 30rem),
+      #070b14;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
+  ::selection { color: white; background: rgba(14, 165, 233, 0.55); }
+  button, input, select { font: inherit; }
 }
 
 @layer components {
-  .caption-overlay {
-    @apply fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/85 text-white
-           px-6 py-3 rounded-lg max-w-2xl text-center text-lg font-medium
-           shadow-lg backdrop-blur-sm z-50;
+  .app-shell { @apply min-h-screen px-5 py-6 sm:px-8 lg:px-10; }
+  .glass-panel {
+    border: 1px solid var(--line);
+    background: linear-gradient(145deg, rgba(20, 30, 51, 0.84), rgba(10, 16, 29, 0.78));
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    backdrop-filter: blur(24px);
   }
-
-  .caption-speaker {
-    @apply text-xs text-slate-400 mb-1 block;
-  }
+  .surface-panel { border: 1px solid var(--line); background: rgba(15, 23, 42, 0.58); }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300/80; }
+  .field-label { @apply mb-2 block text-sm font-medium text-slate-300; }
+  .field { @apply w-full rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 text-[15px] text-white outline-none transition placeholder:text-slate-600 hover:border-white/20 focus:border-cyan-400/60 focus:ring-4 focus:ring-cyan-400/10; }
+  .primary-button { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-500 px-4 py-3 text-sm font-semibold text-slate-950 shadow-[0_12px_32px_rgba(14,165,233,0.18)] transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40; }
+  .secondary-button { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.045] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/20 hover:bg-white/[0.075] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40; }
+  .ghost-button { @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/[0.055] hover:text-white; }
+  .danger-button { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-200 transition hover:border-rose-400/35 hover:bg-rose-500/20; }
+  .caption-overlay { @apply fixed bottom-24 left-1/2 z-50 w-[min(760px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-white/10 bg-slate-950/90 px-6 py-4 text-center text-white shadow-2xl backdrop-blur-xl; }
+  .caption-speaker { @apply mb-1 block text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-300; }
 }
+
+@keyframes lift-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.animate-lift-in { animation: lift-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+.meeting-shell [data-lk-theme="default"] {
+  --lk-bg: #070b14;
+  --lk-bg2: #0f172a;
+  --lk-control-bg: rgba(15, 23, 42, 0.88);
+  --lk-control-hover-bg: rgba(51, 65, 85, 0.9);
+  --lk-accent-bg: #22d3ee;
+  --lk-accent-fg: #071019;
+}
+.meeting-shell .lk-grid-layout { gap: 0.75rem; padding: 5.75rem 1rem 6rem; }
+.meeting-shell .lk-participant-tile {
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, #111b2e, #0a101d);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.2);
+}
+.meeting-shell .lk-participant-tile[data-lk-speaking="true"] { border-color: rgba(34, 211, 238, 0.65); box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.12), 0 18px 50px rgba(0, 0, 0, 0.2); }
+.meeting-shell .lk-participant-metadata { margin: 0.65rem; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0.7rem; background: rgba(7, 11, 20, 0.78); backdrop-filter: blur(12px); }
+.meeting-shell .lk-control-bar { border: 0; border-top: 1px solid rgba(148, 163, 184, 0.12); background: rgba(7, 11, 20, 0.92); padding: 0.7rem 1rem; backdrop-filter: blur(20px); }
+.meeting-shell .lk-button { border-radius: 0.8rem; }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(148, 163, 184, 0.24); background-clip: padding-box; }

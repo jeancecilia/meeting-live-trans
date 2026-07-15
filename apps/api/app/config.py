@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     livekit_api_secret: str = "secret"
     livekit_ws_url: str = "ws://localhost:7880"          # internal / worker use
     livekit_public_ws_url: str = "ws://localhost:7880"    # returned to browsers
+    public_web_url: str = "http://localhost:3000"
+
+    meeting_max_duration_minutes: int = 60
+    meeting_expiry_sweep_seconds: int = 15
 
     openai_api_key: str = "sk-change-me"
     openai_realtime_translate_model: str = "gpt-realtime-translate"

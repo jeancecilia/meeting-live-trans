@@ -36,3 +36,12 @@ The production deployment runs on an Ubuntu VPS with Docker Compose:
 - [ ] Server reboot restores services (Docker restart policies)
 - [ ] Automated database backups enabled
 - [ ] Health check monitoring configured
+- [ ] `PUBLIC_WEB_URL` points to the public frontend origin so generated client
+      invitations use the production domain
+- [ ] `MEETING_MAX_DURATION_MINUTES=60` and
+      `MEETING_EXPIRY_SWEEP_SECONDS=15` are present on the API service
+- [ ] `SEED_ENGLISH_EMAIL` and `SEED_THAI_EMAIL` contain the two production
+      internal login addresses; changing them renames the existing role
+      accounts on API startup without losing meeting history
+- [ ] Verify that host-triggered and automatic meeting endings disconnect the
+      corresponding LiveKit room

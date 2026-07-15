@@ -13,7 +13,7 @@ set -e\n\
 echo "Running database migrations..."\n\
 python -m alembic upgrade head\n\
 echo "Seeding database..."\n\
-python -m app.seed || echo "Seed skipped (users may already exist)"\n\
+python -m app.seed\n\
 echo "Starting API server..."\n\
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000\n\
 ' > /start.sh && chmod +x /start.sh

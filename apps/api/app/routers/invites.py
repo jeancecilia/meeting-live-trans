@@ -12,12 +12,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_internal_role
 from app.database import get_db
+from app.config import settings
+from app.meeting_lifecycle import meeting_deadline, meeting_is_expired
 from app.models.meeting import Meeting
 from app.models.meeting_invite import MeetingInvite
 from app.models.user import User
@@ -27,10 +29,10 @@ router = APIRouter(tags=["invites"])
 
 
 class CreateInviteRequest(BaseModel):
-    guest_name: str
+    guest_name: str = Field(min_length=1, max_length=100)
     expected_spoken_language: str = "en"
-    expires_in_hours: int = 24
-    max_uses: int = 1
+    expires_in_hours: int = Field(default=1, ge=1, le=24)
+    max_uses: int = Field(default=1, ge=1, le=5)
 
 
 class InviteResponse(BaseModel):
@@ -88,7 +90,7 @@ async def create_invite(
     meeting = result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
-    if meeting.status == "ended":
+    if meeting.status == "ended" or meeting_is_expired(meeting):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Meeting has ended")
 
     if body.expected_spoken_language not in ("en", "th"):
@@ -98,12 +100,15 @@ async def create_invite(
         )
 
     raw_token = _generate_invite_token()
+    requested_expiry = datetime.now(timezone.utc) + timedelta(hours=body.expires_in_hours)
+    deadline = meeting_deadline(meeting)
+    expires_at = min(requested_expiry, deadline) if deadline else requested_expiry
     invite = MeetingInvite(
         meeting_id=meeting_id,
         token_hash=_hash_token(raw_token),
-        guest_name=body.guest_name,
+        guest_name=body.guest_name.strip(),
         expected_spoken_language=body.expected_spoken_language,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=body.expires_in_hours),
+        expires_at=expires_at,
         max_uses=body.max_uses,
     )
     db.add(invite)
@@ -113,7 +118,7 @@ async def create_invite(
     return InviteResponse(
         id=invite.id,
         token=raw_token,
-        invite_url=f"https://meet.example.com/join/{raw_token}",
+        invite_url=f"{settings.public_web_url.rstrip('/')}/join/{raw_token}",
         guest_name=invite.guest_name,
         expires_at=invite.expires_at.isoformat(),
         max_uses=invite.max_uses,
@@ -168,7 +173,7 @@ async def preview_invite(
 
     meeting_result = await db.execute(select(Meeting).where(Meeting.id == invite.meeting_id))
     meeting = meeting_result.scalar_one_or_none()
-    if not meeting or meeting.status == "ended":
+    if not meeting or meeting.status == "ended" or meeting_is_expired(meeting, now):
         is_valid = False
 
     return InvitePreviewResponse(
@@ -217,7 +222,7 @@ async def join_with_invite(
     meeting = meeting_result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
-    if meeting.status == "ended":
+    if meeting.status == "ended" or meeting_is_expired(meeting, now):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Meeting has ended")
 
     # Consume the invite

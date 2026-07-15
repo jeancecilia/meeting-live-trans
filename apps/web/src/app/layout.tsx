@@ -2,21 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Meeting Live Trans",
-  description:
-    "Private English ↔ Thai meeting platform with realtime translation",
+  title: "LumaMeet — English & Thai meetings",
+  description: "Private English ↔ Thai video meetings with real-time translated captions",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-slate-950 text-slate-100 antialiased min-h-screen">
-        {children}
-      </body>
+      <body className="min-h-screen antialiased">{children}</body>
     </html>
   );
 }

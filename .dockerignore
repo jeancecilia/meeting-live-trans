@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+**/node_modules
+**/.next
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+*.log
+worker_logs*.txt
+server_env.txt
+test_login.json
+test_realtime*.py
+test_ws.py
+get_*logs*.py
+upload_worker*.py

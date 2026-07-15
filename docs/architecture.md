@@ -21,6 +21,19 @@ The Meeting Live Trans platform enables browser-based video meetings with realti
 
 3. **Private caption routing.** Captions are delivered through authenticated WebSocket connections. The backend enforces authorization server-side. Guests cannot access captions even by modifying frontend JavaScript. Internal users receive their configured caption language and a private preview of translations generated from their own microphone, so one-device translation testing does not require a second internal account.
 
+4. **Authoritative meeting expiry.** Meetings have a server-enforced maximum
+   duration of 60 minutes. The deadline starts when the first participant joins;
+   unstarted meetings expire 60 minutes after creation so invitation links do
+   not remain stale. A background API sweep marks due meetings ended, records an
+   audit event, and calls LiveKit `DeleteRoom` to disconnect every participant.
+   Client countdowns are informational and cannot extend the deadline.
+
+5. **One-time client invitations.** Creating a meeting in the internal
+   dashboard also creates a single-use guest link. Only its SHA-256 hash is
+   stored; the raw link is returned once for copy/share. Guest access never
+   includes caption authorization, and invitation tokens are redacted from API
+   access logs.
+
 ## Component diagram
 
 ```
