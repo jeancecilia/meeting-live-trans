@@ -110,22 +110,6 @@
 .law-topbar { color: white !important; background: var(--navy); }
 .law-topbar * { color: white !important; }
 
-.law-photo-panel {
-  isolation: isolate;
-  border-color: rgba(178, 134, 107, 0.48);
-  background-image:
-    linear-gradient(150deg, rgba(16, 20, 33, 0.9), rgba(24, 28, 43, 0.68)),
-    url("https://en.udonthanilawyer.com/wp-content/uploads/2025/04/cropped-shot-of-judge-pointing-at-papers-and-clien-FZFUBMU.jpg");
-  background-position: center;
-  background-size: cover;
-  box-shadow: 0 28px 70px rgba(41, 48, 71, 0.22);
-}
-.law-photo-panel .text-white { color: white !important; }
-.law-photo-panel .text-slate-300 { color: #e9e5e2 !important; }
-.law-photo-panel .text-slate-500 { color: #b9b4b1 !important; }
-.law-photo-panel .text-cyan-300 { color: #d6aa8d !important; }
-.law-photo-panel .border-cyan-400\/30 { border-color: rgba(214, 170, 141, 0.5) !important; }
-
 @keyframes lift-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .animate-lift-in { animation: lift-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 

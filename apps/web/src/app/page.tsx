@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Brand } from "@/components/Brand";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useUiLanguage } from "@/lib/ui-language";
@@ -71,31 +72,16 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="glass-panel law-photo-panel animate-lift-in relative overflow-hidden rounded-[1.4rem] p-5 [animation-delay:120ms] sm:p-7">
-          <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-[#aa7d61]/20 blur-3xl" />
-          <div className="relative mb-5 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-white">{copy.consultation}</p>
-              <p className="mt-1 text-xs text-slate-500">{copy.participants}</p>
-            </div>
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-300">{copy.ready}</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="aspect-[4/3] rounded-2xl border border-white/10 bg-gradient-to-br from-slate-700 to-slate-900 p-3">
-              <span className="rounded-lg bg-black/30 px-2 py-1 text-[10px] text-slate-300">{copy.englishSpeaker}</span>
-            </div>
-            <div className="aspect-[4/3] rounded-2xl border border-[#c79577]/40 bg-gradient-to-br from-[#293047] to-slate-900 p-3">
-              <span className="rounded-lg bg-black/30 px-2 py-1 text-[10px] text-slate-300">{copy.thaiSpeaker}</span>
-            </div>
-          </div>
-          <div className="relative mx-auto -mt-4 w-[90%] rounded-2xl border border-white/10 bg-slate-950/90 p-4 text-center shadow-2xl">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300">{copy.client}</span>
-            <p className="mt-1 text-sm font-medium text-white">เราสามารถเริ่มโครงการได้ในวันอังคาร</p>
-          </div>
-          <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
-            <span className="h-2 w-2 rounded-full bg-[#c79577] shadow-[0_0_12px_rgba(199,149,119,.8)]" />
-            {copy.translated}
-          </div>
+        <div className="animate-lift-in relative aspect-[4/5] overflow-hidden rounded-[1.4rem] border border-[#aa7d61]/35 bg-white shadow-[0_28px_70px_rgba(41,48,71,0.20)] [animation-delay:120ms] lg:aspect-[4/3]">
+          <Image
+            src="/lawyer-nam-certification.jpeg"
+            alt={language === "th" ? "ทนายความอุดรลอว์ในพิธีอบรมวิชาชีพกฎหมาย" : "UdonLaw lawyer at a professional legal certification ceremony"}
+            fill
+            priority
+            unoptimized
+            sizes="(min-width: 1024px) 42vw, 100vw"
+            className="object-cover object-[center_43%]"
+          />
         </div>
       </section>
     </main>
