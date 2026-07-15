@@ -19,7 +19,7 @@ The Meeting Live Trans platform enables browser-based video meetings with realti
    fallback. Both paths receive mono PCM16 audio at 24 kHz, and validated direct
    source languages remain environment-configurable.
 
-3. **Private caption routing.** Captions are delivered through authenticated WebSocket connections. The backend enforces authorization server-side. Guests cannot access captions even by modifying frontend JavaScript. Internal users receive their configured caption language and a private preview of translations generated from their own microphone, so one-device translation testing does not require a second internal account.
+3. **Private caption routing.** Captions are delivered through authenticated WebSocket connections. The backend enforces authorization server-side. Guests cannot access captions even by modifying frontend JavaScript. Every joined internal user receives the translated side of each supported English/Thai utterance, regardless of the internal user's preferred language. This lets either lawyer verify a client's translation without needing the other internal account online.
 
 4. **Authoritative meeting expiry.** Meetings have a server-enforced maximum
    duration of 60 minutes. The deadline starts when the first participant joins;

@@ -57,10 +57,18 @@ def should_route_caption(
     subscriber_language: str,
     event: CaptionEventRequest,
 ) -> bool:
-    """Route the normal language feed plus an internal user's own translation."""
+    """Route each supported translation to every authorized internal subscriber.
+
+    Membership, role and ``caption_access`` are enforced before a WebSocket is
+    registered.  Once registered, both internal lawyers receive the translated
+    side of every English/Thai utterance.  This lets either lawyer verify a
+    client's translation without needing the other internal account online.
+    """
+    del subscriber_id, subscriber_language
     return (
-        subscriber_language == event.target_language
-        or subscriber_id == event.speaker_id
+        event.source_language in {"en", "th"}
+        and event.target_language in {"en", "th"}
+        and event.source_language != event.target_language
     )
 
 
